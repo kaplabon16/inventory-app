@@ -5,3 +5,4 @@
 :root { color-scheme: light dark; }
 
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));

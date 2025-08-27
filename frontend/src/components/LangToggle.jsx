@@ -1,16 +1,19 @@
-import i18n from '../i18n'
-import { useUI } from '../store/ui'
+import { useTranslation } from "react-i18next"
 
-export default function LangToggle() {
-  const { lang, setLang } = useUI()
-  const toggle = () => {
-    const next = lang === 'en' ? 'bn' : 'en'
+export default function LanguageToggle() {
+  const { i18n, t } = useTranslation()
+
+  const switchLanguage = () => {
+    const next = i18n.language === "en" ? "bn" : "en"
     i18n.changeLanguage(next)
-    setLang(next)
   }
+
   return (
-    <button onClick={toggle} className="px-3 py-1 rounded border text-sm">
-      {lang === 'en' ? 'বাংলা' : 'EN'}
+    <button
+      onClick={switchLanguage}
+      className="px-3 py-1 text-gray-800 bg-gray-200 border rounded dark:bg-gray-700 dark:text-gray-100"
+    >
+      {t("language")}: {i18n.language.toUpperCase()}
     </button>
   )
 }
