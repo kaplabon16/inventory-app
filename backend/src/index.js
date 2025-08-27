@@ -1,39 +1,40 @@
+// backend/src/index.js
+import 'dotenv/config'
 import express from 'express'
-import cors from 'cors'
 import cookieParser from 'cookie-parser'
-import morgan from 'morgan'
-import authRoutes from './routes/authRoutes.js'
-import dotenv from 'dotenv'
+import corsMiddleware from './middleware/cors.js'
 
-dotenv.config()
+import authRoutes from './routes/authRoutes.js'
+import inventoryRoutes from './routes/inventoryRoutes.js'
+import itemRoutes from './routes/itemRoutes.js'
+import searchRoutes from './routes/searchRoutes.js'
+import adminRoutes from './routes/adminRoutes.js'
+import userRoutes from './routes/userRoutes.js'
 
 const app = express()
 
-// Ensure FRONTEND_URL has protocol, e.g. https://inventory-app-one-iota.vercel.app
-const FRONTEND_ORIGIN = process.env.FRONTEND_URL?.startsWith('http')
-  ? process.env.FRONTEND_URL
-  : `https://${process.env.FRONTEND_URL}`
-
-app.use(cors({
-  origin: [FRONTEND_ORIGIN, 'http://localhost:5173'],
-  credentials: true,
-}))
-
 app.use(express.json())
 app.use(cookieParser())
-app.use(morgan('dev'))
 
-// Health check
-app.get('/api/health', (_req,res)=>res.json({ok:true}))
+// CORS (must be before routes)
+app.use(corsMiddleware)
+app.options('*', corsMiddleware) // preflight
 
-// ✅ Mount auth routes on /api/auth
+// Simple health check
+app.get('/api/health', (_req, res) => res.json({ ok: true }))
+
+// Routes
 app.use('/api/auth', authRoutes)
+app.use('/api/inventories', inventoryRoutes)
+app.use('/api/items', itemRoutes)
+app.use('/api/search', searchRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/users', userRoutes)
 
-// Fallback 404 JSON
-app.use((req,res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
+// 404 JSON
+app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.path }))
 
 const PORT = process.env.PORT || 5045
 app.listen(PORT, () => {
-  console.log(`API listening on :${PORT}`)
-  console.log(`CORS allowed for: ${FRONTEND_ORIGIN}`)
+  console.log(`Backend listening on ${PORT}`)
 })

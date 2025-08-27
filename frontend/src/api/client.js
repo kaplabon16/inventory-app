@@ -1,16 +1,17 @@
+// frontend/src/api/client.js
 import axios from 'axios'
 
-// Ensure no trailing slash
-const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
+const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'') // e.g. https://inventoryapp-app.up.railway.app
+
+// Build full /api path consistently
+export const apiUrl = (path = '') => {
+  const p = path.startsWith('/api') ? path : `/api${path}`
+  return `${base}${p}`
+}
 
 const api = axios.create({
-  baseURL: BASE,
-  withCredentials: true,
-  headers: { 'Content-Type': 'application/json' }
+  baseURL: `${base}/api`,
+  withCredentials: true, // send/receive auth cookies across origins
 })
-
-// Helper to always prefix with /api
-export const apiUrl = (path = '') =>
-  `${BASE}/api${path.startsWith('/') ? path : `/${path}`}`
 
 export default api
