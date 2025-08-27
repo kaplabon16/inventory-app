@@ -1,21 +1,24 @@
 // frontend/src/api/client.js
 import axios from 'axios'
 
-const base = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
+const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '')
 
+// Always hit full paths like `/api/auth/login`
 const api = axios.create({
-  baseURL: base,
-  withCredentials: true, // send/receive auth cookie from the backend origin
+  baseURL: BASE,
+  withCredentials: true, // <- REQUIRED for cross-site cookies
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Ensure every request goes to exactly one "/api/..." (no double /api)
-api.interceptors.request.use((config) => {
-  let url = config.url || ''
-  if (!url.startsWith('/')) url = '/' + url
-  if (!url.startsWith('/api/')) url = '/api' + url
-  url = url.replace(/\/api\/api\//g, '/api/')
-  config.url = url
-  return config
-})
+// Optional: simple error wrapper
+api.interceptors.response.use(
+  (r) => r,
+  (err) => {
+    // Surface the server message if present
+    const msg = err?.response?.data?.message || err?.message || 'Request failed'
+    console.error('API error:', msg, err?.response?.data || '')
+    return Promise.reject(err)
+  }
+)
 
 export default api
