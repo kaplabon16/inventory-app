@@ -1,59 +1,41 @@
-import { useState } from "react"
-import api, { apiUrl } from "../api/client"
-import { useNavigate } from "react-router-dom"
+import { useState } from 'react'
+import api from '../api/client'
+import { useAuth } from '../store/auth'
+import { useNavigate, Link } from 'react-router-dom'
 
 export default function Register() {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
+  const { setUser } = useAuth()
   const navigate = useNavigate()
+  const [name,setName] = useState('')
+  const [email,setEmail] = useState('')
+  const [password,setPassword] = useState('')
+  const [err,setErr] = useState('')
 
-  const submit = async (e) => {
+  async function onSubmit(e) {
     e.preventDefault()
-    setError("")
+    setErr('')
     try {
-      await api.post(apiUrl("/auth/register"), { name, email, password })
-      // after register, send to login so they can sign in
-      navigate("/login")
-    } catch (err) {
-      setError(err?.response?.data?.error || "Registration failed")
+      const { data } = await api.post('/api/auth/register', { name, email, password })
+      setUser(data)
+      navigate('/')
+    } catch (e) {
+      setErr(e?.response?.data?.message || 'Registration failed')
     }
   }
 
   return (
-    <div className="max-w-md mx-auto mt-10">
-      <h1 className="mb-4 text-2xl font-semibold">Create account</h1>
-      <form onSubmit={submit} className="space-y-3">
-        <input
-          className="w-full px-3 py-2 bg-white border rounded dark:bg-gray-900"
-          placeholder="Full name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <input
-          className="w-full px-3 py-2 bg-white border rounded dark:bg-gray-900"
-          placeholder="Email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-        />
-        <input
-          className="w-full px-3 py-2 bg-white border rounded dark:bg-gray-900"
-          placeholder="Password"
-          type="password"
-          minLength={6}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-        />
-        {error && <div className="text-sm text-red-600">{error}</div>}
-        <button className="w-full py-2 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-          Register
-        </button>
+    <div className="max-w-md p-6 mx-auto">
+      <h1 className="mb-4 text-2xl font-semibold">Register</h1>
+      {err && <div className="p-3 mb-3 text-red-700 bg-red-100 rounded">{err}</div>}
+      <form onSubmit={onSubmit} className="space-y-3">
+        <input className="w-full p-2 border rounded" placeholder="Full name" value={name} onChange={e=>setName(e.target.value)} />
+        <input className="w-full p-2 border rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+        <input className="w-full p-2 border rounded" placeholder="Password (min 6 chars)" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+        <button className="w-full p-2 font-medium text-white bg-black rounded dark:bg-white dark:text-black">Create account</button>
       </form>
+      <p className="mt-4 text-sm">
+        Have an account? <Link className="underline" to="/login">Login</Link>
+      </p>
     </div>
   )
 }

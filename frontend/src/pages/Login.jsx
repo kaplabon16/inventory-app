@@ -6,7 +6,7 @@ import { useNavigate, Link } from 'react-router-dom'
 export default function Login() {
   const { setUser } = useAuth()
   const navigate = useNavigate()
-  const API = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '')
+  const API = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [err, setErr] = useState('')
@@ -15,6 +15,7 @@ export default function Login() {
     e.preventDefault()
     setErr('')
     try {
+      // IMPORTANT: keep /api/ here — baseURL is just the origin
       const { data } = await api.post('/api/auth/login', { email, password })
       setUser(data)
       navigate('/')
@@ -41,7 +42,7 @@ export default function Login() {
       </form>
 
       <div className="mt-6 space-y-2">
-        {/* Direct to backend OAuth endpoints (no double /api) */}
+        {/* Direct backend OAuth links — DO NOT add /api twice */}
         <a className="block p-2 text-center border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
            href={`${API}/api/auth/google`}>Continue with Google</a>
         <a className="block p-2 text-center border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
