@@ -18,7 +18,8 @@ import ProtectedRoute from "./routes/ProtectedRoute"
 export default function App() {
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Root wrapper with proper dark/light contrast */}
+      <div className="flex flex-col min-h-screen text-gray-900 transition-colors duration-300 bg-white dark:bg-gray-900 dark:text-gray-100">
         {/* Header always visible */}
         <Header />
 
@@ -27,7 +28,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} /> {/* NEW */}
+            <Route path="/register" element={<Register />} />
             <Route
               path="/profile"
               element={
