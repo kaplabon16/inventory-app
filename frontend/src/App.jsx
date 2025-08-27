@@ -1,39 +1,77 @@
-import './styles.css'
-import './i18n'
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import Header from './components/Header'
-import Home from './pages/Home'
-import Login from './pages/Login'
-import Profile from './pages/Profile'
-import Admin from './pages/Admin'
-import InventoryList from './pages/InventoryList'
-import InventoryPage from './pages/InventoryPage'
-import ItemPage from './pages/ItemPage'
-import Search from './pages/Search'
-import NotFound from './pages/NotFound'
-import ProtectedRoute from './routes/ProtectedRoute'
-import { useEffect } from 'react'
-import { useAuth } from './store/auth'
-import { useUI } from './store/ui'
+import { BrowserRouter, Routes, Route } from "react-router-dom"
+import "./styles.css"
+import "./i18n"
+
+import Header from "./components/Header"
+import Home from "./pages/Home"
+import Login from "./pages/Login"
+import Register from "./pages/Register"
+import Profile from "./pages/Profile"
+import InventoryList from "./pages/InventoryList"
+import InventoryPage from "./pages/InventoryPage"
+import ItemPage from "./pages/ItemPage"
+import Admin from "./pages/Admin"
+import Search from "./pages/Search"
+
+import ProtectedRoute from "./routes/ProtectedRoute"
 
 export default function App() {
-  const { loadMe } = useAuth()
-  const { theme, setTheme } = useUI()
-  useEffect(()=>{ loadMe(); setTheme(theme) },[])
   return (
     <BrowserRouter>
-      <Header/>
-      <Routes>
-        <Route path="/" element={<Home/>}/>
-        <Route path="/login" element={<Login/>}/>
-        <Route path="/me" element={<ProtectedRoute><Profile/></ProtectedRoute>}/>
-        <Route path="/admin" element={<ProtectedRoute><Admin/></ProtectedRoute>}/>
-        <Route path="/inventory/new" element={<ProtectedRoute><InventoryList/></ProtectedRoute>}/>
-        <Route path="/inventory/:id" element={<InventoryPage/>}/>
-        <Route path="/inventory/:id/item/:itemId" element={<ItemPage/>}/>
-        <Route path="/search" element={<Search/>}/>
-        <Route path="*" element={<NotFound/>}/>
-      </Routes>
+      <div className="flex flex-col min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Header always visible */}
+        <Header />
+
+        {/* Main content */}
+        <main className="flex-1 p-4">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} /> {/* NEW */}
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventories"
+              element={
+                <ProtectedRoute>
+                  <InventoryList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventories/:id"
+              element={
+                <ProtectedRoute>
+                  <InventoryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/items/:id"
+              element={
+                <ProtectedRoute>
+                  <ItemPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <Admin />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="/search" element={<Search />} />
+          </Routes>
+        </main>
+      </div>
     </BrowserRouter>
   )
 }

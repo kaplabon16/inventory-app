@@ -18,6 +18,9 @@ model User {
   blocked    Boolean  @default(false)
   createdAt  DateTime @default(now())
 
+  // Password is optional: required only for local login
+  password   String?  
+
   inventories Inventory[] @relation("UserInventories")
   items       Item[]      @relation("ItemCreatedBy")
   comments    Comment[]   @relation("CommentUser")
@@ -50,7 +53,7 @@ model Inventory {
   tags      InventoryTag[]
   access    InventoryAccess[]
   comments  Comment[]
-  sequence  Sequence?         // <-- opposite side for Sequence
+  sequence  Sequence?         // opposite side for Sequence
 
   @@index([ownerId])
 }
@@ -97,8 +100,8 @@ enum IdElemType {
 }
 
 model Sequence {
-  inventoryId String  @id
-  value       Int     @default(0)
+  inventoryId String   @id
+  value       Int      @default(0)
   inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
 }
 
@@ -130,7 +133,7 @@ model Item {
   bool2  Boolean?
   bool3  Boolean?
 
-  comments Comment[]     // <-- opposite side for Comment.item
+  comments Comment[]     // opposite side for Comment.item
 
   @@unique([inventoryId, customId])
   @@index([inventoryId])
