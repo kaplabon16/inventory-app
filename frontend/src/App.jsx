@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import "./styles.css"
 import "./i18n"
-
+import { useEffect } from 'react'
+import { useAuth } from './store/auth'
 import Header from "./components/Header"
 import Home from "./pages/Home"
 import Login from "./pages/Login"
@@ -16,6 +17,8 @@ import Search from "./pages/Search"
 import ProtectedRoute from "./routes/ProtectedRoute"
 
 export default function App() {
+  useEffect(() => { useAuth.getState().hydrate() }, [])
+
   return (
     <BrowserRouter>
       {/* Root wrapper with proper dark/light contrast */}

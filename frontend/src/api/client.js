@@ -1,24 +1,19 @@
 // frontend/src/api/client.js
 import axios from 'axios'
 
-const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '')
+// Make sure we NEVER keep a trailing /api in base (this prevents /api/api/…)
+const RAW = import.meta.env.VITE_API_BASE || ''
+const BASE = RAW.replace(/\/+$/,'').replace(/\/api$/i, '') // strip trailing slashes and a trailing /api
 
-// Always hit full paths like `/api/auth/login`
 const api = axios.create({
-  baseURL: BASE,
-  withCredentials: true, // <- REQUIRED for cross-site cookies
+  baseURL: BASE,                 // e.g. https://inventoryapp-app.up.railway.app
+  withCredentials: true,         // REQUIRED for cross-site cookie on OAuth/session
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Optional: simple error wrapper
-api.interceptors.response.use(
-  (r) => r,
-  (err) => {
-    // Surface the server message if present
-    const msg = err?.response?.data?.message || err?.message || 'Request failed'
-    console.error('API error:', msg, err?.response?.data || '')
-    return Promise.reject(err)
-  }
-)
+// Debug once to ensure it’s correct in browser console
+if (typeof window !== 'undefined') {
+  console.log('[api] baseURL =', api.defaults.baseURL)
+}
 
 export default api
