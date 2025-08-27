@@ -1,32 +1,60 @@
-import { Link } from 'react-router-dom'
-import { useEffect, useState } from 'react'
-import api from '../api/client'
-import Table from '../components/Table'
-import Toolbar from '../components/Toolbar'
-import { useTranslation } from 'react-i18next'
+import { Link, useNavigate } from "react-router-dom"
+import { useEffect, useState } from "react"
+import api, { apiUrl } from "../api/client"
+import { useAuth } from "../store/auth"
+import Table from "../components/Table"
 
 export default function Home() {
-  const { t } = useTranslation()
   const [rows, setRows] = useState([])
-  const [sel, setSel] = useState([])
-  const load = async () => {
-    const { data } = await api.get('/api/inventories')
-    setRows(data)
+  const { user } = useAuth()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const res = await api.get(apiUrl("/inventories"), { params: { take: 10 } })
+        if (active) setRows(res.data?.data || [])
+      } catch {
+        if (active) setRows([])
+      }
+    })()
+    return () => (active = false)
+  }, [])
+
+  const createClicked = () => {
+    if (!user) {
+      // earlier behavior: require login
+      navigate("/login")
+      return
+    }
+    // creation is done on the inventories page
+    navigate("/inventories")
   }
-  useEffect(()=>{ load() },[])
-  const columns = [
-    { key: 'title', title: t('title'), render:(v,r)=><Link className="text-blue-600" to={`/inventory/${r.id}`}>{v}</Link> },
-    { key: 'categoryName', title: t('category') },
-    { key: 'ownerName', title: t('owner') },
-    { key: 'itemsCount', title: t('items') }
-  ]
+
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <Toolbar
-        left={<div className="text-sm text-gray-500">{t('inventories')}</div>}
-        right={<Link to="/inventory/new" className="px-3 py-1 border rounded text-sm">{t('createInventory')}</Link>}
+    <div className="max-w-6xl mx-auto">
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-medium">Inventories</h2>
+        <button
+          onClick={createClicked}
+          className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          Create inventory
+        </button>
+      </div>
+
+      <Table
+        columns={[
+          { key: "title", title: "Title" },
+          { key: "categoryName", title: "Category" },
+          { key: "ownerName", title: "Owner" },
+          { key: "itemsCount", title: "Items" },
+        ]}
+        rows={rows}
+        rowLink={(r) => `/inventories/${r.id}`}
+        emptyText="No data"
       />
-      <Table columns={columns} rows={rows} onSelect={setSel}/>
     </div>
   )
 }

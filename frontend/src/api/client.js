@@ -1,10 +1,16 @@
 import axios from 'axios'
 
-const base = import.meta.env.VITE_API_BASE // e.g. https://inventoryapp-app.up.railway.app
+// Ensure no trailing slash
+const BASE = (import.meta.env.VITE_API_BASE || '').replace(/\/$/, '')
 
 const api = axios.create({
-  baseURL: base,
-  withCredentials: true, // send/receive cookies for /api/auth/me, etc.
+  baseURL: BASE,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' }
 })
+
+// Helper to always prefix with /api
+export const apiUrl = (path = '') =>
+  `${BASE}/api${path.startsWith('/') ? path : `/${path}`}`
 
 export default api
