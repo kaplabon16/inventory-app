@@ -60,7 +60,7 @@ async function mount(modulePath, basePath) {
 await mount('./routes/inventoryRoutes.js', '/api/inventories')
 await mount('./routes/itemRoutes.js', '/api/items')
 await mount('./routes/searchRoutes.js', '/api/search')
-// (no adminRoutes/tagRoutes unless they exist)
+await mount('./routes/userRoutes.js', '/api/users') // <-- FIX: needed by Access tab
 
 app.use((req,res)=>res.status(404).json({ error:'Not found', path: req.originalUrl }))
 

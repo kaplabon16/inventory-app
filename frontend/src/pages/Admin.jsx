@@ -29,15 +29,15 @@ export default function Admin() {
   ]
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
+    <div className="max-w-6xl p-4 mx-auto">
       <Toolbar
         left={<div className="text-sm text-gray-500">{t('users')}</div>}
         right={
           <>
-            <button onClick={act('make-admin')} className="px-2 py-1 border rounded text-sm">{t('makeAdmin')}</button>
-            <button onClick={act('remove-admin')} className="px-2 py-1 border rounded text-sm">{t('removeAdmin')}</button>
-            <button onClick={act('block')} className="px-2 py-1 border rounded text-sm">{t('block')}</button>
-            <button onClick={act('unblock')} className="px-2 py-1 border rounded text-sm">{t('unblock')}</button>
+            <button onClick={act('make-admin')} className="px-2 py-1 text-sm border rounded">{t('makeAdmin')}</button>
+            <button onClick={act('remove-admin')} className="px-2 py-1 text-sm border rounded">{t('removeAdmin')}</button>
+            <button onClick={act('block')} className="px-2 py-1 text-sm border rounded">{t('block')}</button>
+            <button onClick={act('unblock')} className="px-2 py-1 text-sm border rounded">{t('unblock')}</button>
           </>
         }
       />

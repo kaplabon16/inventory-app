@@ -1,3 +1,4 @@
+// frontend/src/store/auth.js
 import { create } from 'zustand'
 import api from '../api/client'
 
@@ -14,23 +15,25 @@ export const useAuth = create((set, get) => ({
     }
   },
 
-  // alias used by App.jsx
+  // App.jsx calls hydrate(); keep it as an alias so it never breaks
   async hydrate() {
     return get().loadMe()
   },
 
   loginGoogle() {
-    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '').replace(/\/api$/i, '')
+    // full-page nav to backend OAuth
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
     window.location.href = `${base}/api/auth/google`
   },
 
   loginGithub() {
-    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/, '').replace(/\/api$/i, '')
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
     window.location.href = `${base}/api/auth/github`
   },
 
   async logout() {
-    await api.post('/api/auth/logout')
-    set({ user: null })
-  }
+    try { await api.post('/api/auth/logout') } finally {
+      set({ user: null })
+    }
+  },
 }))

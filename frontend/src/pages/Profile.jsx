@@ -1,4 +1,3 @@
-// frontend/src/pages/Profile.jsx
 import { useAuth } from '../store/auth'
 import { useEffect, useState } from 'react'
 import api from '../api/client'
@@ -23,7 +22,7 @@ export default function Profile() {
   }
   useEffect(()=>{ loadMe(); load() },[])
   const cols = [
-    { key: 'title', title: t('title'), render:(v,r)=><Link to={`/inventories/${r.id}`} className="text-blue-600">{v}</Link> },
+    { key: 'title', title: t('title'), render:(v,r)=><Link to={`/inventory/${r.id}`} className="text-blue-600">{v}</Link> },
     { key: 'itemsCount', title: t('items') }
   ]
   return (

@@ -15,9 +15,18 @@ export default function Login() {
     e.preventDefault()
     setErr('')
     try {
-      // IMPORTANT: keep /api/ here — baseURL is just the origin
+      // Keep /api here — axios baseURL is origin only
       const { data } = await api.post('/api/auth/login', { email, password })
-      setUser(data)
+      const user = data?.user || data
+      setUser(user)
+
+      // If backend returned a token, do a top-level bounce to set cookie cross-site
+      if (data?.token) {
+        const next = window.location.origin
+        window.location.href = `${API}/api/auth/bounce?token=${encodeURIComponent(data.token)}&next=${encodeURIComponent(next)}`
+        return
+      }
+
       navigate('/')
     } catch (e) {
       const code = e?.response?.data?.error
@@ -37,7 +46,7 @@ export default function Login() {
 
       <form onSubmit={onSubmit} className="space-y-3">
         <input className="w-full p-2 border rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input className="w-full p-2 border rounded" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+        <input className="w-full p-2 border rounded" placeholder="Password (min 6 chars)" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         <button className="w-full p-2 font-medium text-white bg-black rounded dark:bg-white dark:text-black">Sign in</button>
       </form>
 
