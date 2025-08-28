@@ -1,5 +1,5 @@
-import { Link, useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import api, { apiUrl } from "../api/client"
 import { useAuth } from "../store/auth"
 import Table from "../components/Table"
@@ -13,8 +13,9 @@ export default function Home() {
     let active = true
     ;(async () => {
       try {
-        const res = await api.get(apiUrl("/inventories"), { params: { take: 10 } })
-        if (active) setRows(res.data?.data || [])
+        const res = await api.get(apiUrl("/inventories"))
+        const data = Array.isArray(res.data) ? res.data : (res.data?.data || res.data || [])
+        if (active) setRows(data)
       } catch {
         if (active) setRows([])
       }
@@ -22,26 +23,17 @@ export default function Home() {
     return () => (active = false)
   }, [])
 
-  const createClicked = () => {
-    if (!user) {
-      // earlier behavior: require login
-      navigate("/login")
-      return
-    }
-    // creation is done on the inventories page
-    navigate("/inventories")
+  const create = async () => {
+    if (!user) return navigate("/login")
+    const { data } = await api.post(apiUrl('/inventories'), { title: 'New Inventory', description: '', categoryId: 1 })
+    if (data?.id) navigate(`/inventories/${data.id}`)
   }
 
   return (
     <div className="max-w-6xl mx-auto">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-medium">Inventories</h2>
-        <button
-          onClick={createClicked}
-          className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-        >
-          Create inventory
-        </button>
+        <button onClick={create} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">Create inventory</button>
       </div>
 
       <Table

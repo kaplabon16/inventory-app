@@ -15,25 +15,13 @@ export default function Login() {
     e.preventDefault()
     setErr('')
     try {
-      // Keep /api here — axios baseURL is origin only
       const { data } = await api.post('/api/auth/login', { email, password })
-      const user = data?.user || data
-      setUser(user)
-
-      // If backend returned a token, do a top-level bounce to set cookie cross-site
-      if (data?.token) {
-        const next = window.location.origin
-        window.location.href = `${API}/api/auth/bounce?token=${encodeURIComponent(data.token)}&next=${encodeURIComponent(next)}`
-        return
-      }
-
-      navigate('/')
+      setUser(data); navigate('/')
     } catch (e) {
       const code = e?.response?.data?.error
-      const msg =
-        code === 'OAUTH_ONLY'
-          ? 'This email is linked to Google/GitHub. Use social login or set a password after OAuth login.'
-          : e?.response?.data?.message || 'Login failed'
+      const msg = code === 'OAUTH_ONLY'
+        ? 'This email is linked to Google/GitHub. Use social login or set a password after OAuth login.'
+        : e?.response?.data?.message || 'Login failed'
       setErr(msg)
     }
   }
@@ -46,16 +34,13 @@ export default function Login() {
 
       <form onSubmit={onSubmit} className="space-y-3">
         <input className="w-full p-2 border rounded" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
-        <input className="w-full p-2 border rounded" placeholder="Password (min 6 chars)" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
+        <input className="w-full p-2 border rounded" placeholder="Password" type="password" value={password} onChange={e=>setPassword(e.target.value)} />
         <button className="w-full p-2 font-medium text-white bg-black rounded dark:bg-white dark:text-black">Sign in</button>
       </form>
 
       <div className="mt-6 space-y-2">
-        {/* Direct backend OAuth links — DO NOT add /api twice */}
-        <a className="block p-2 text-center border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-           href={`${API}/api/auth/google`}>Continue with Google</a>
-        <a className="block p-2 text-center border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-           href={`${API}/api/auth/github`}>Continue with GitHub</a>
+        <a className="block p-2 text-center border rounded hover:bg-gray-50 dark:hover:bg-gray-800" href={`${API}/api/auth/google`}>Continue with Google</a>
+        <a className="block p-2 text-center border rounded hover:bg-gray-50 dark:hover:bg-gray-800" href={`${API}/api/auth/github`}>Continue with GitHub</a>
       </div>
 
       <p className="mt-4 text-sm">

@@ -9,15 +9,14 @@ export function signToken(user) {
 
 export async function requireAuth(req, res, next) {
   try {
-    const token = req.cookies?.token || (req.headers.authorization||'').replace('Bearer ','')
+    const token = req.cookies?.token || (req.headers.authorization || '').replace('Bearer ', '')
     if (!token) return res.status(401).json({ error: 'Unauthorized' })
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await prisma.user.findUnique({ where: { id: decoded.id } })
     if (!user || user.blocked) return res.status(401).json({ error: 'Unauthorized' })
     req.user = user
     next()
-  } catch (e) {
+  } catch {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 }
-
