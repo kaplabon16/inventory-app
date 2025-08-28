@@ -84,9 +84,9 @@ export default function InventoryPage() {
   ]
 
   return (
-    <div className="max-w-6xl mx-auto p-4">
+    <div className="max-w-6xl p-4 mx-auto">
       <div className="flex items-center gap-3">
-        <input className="text-xl font-semibold border rounded px-2 py-1"
+        <input className="px-2 py-1 text-xl font-semibold border rounded"
                value={inv.title} onChange={e=>setInv({...inv,title:e.target.value})}/>
         <span className="text-sm text-gray-500">{autosaveState==='saving' ? t('autosaving') : t('saved')}</span>
       </div>
@@ -107,8 +107,8 @@ export default function InventoryPage() {
           <Toolbar
             left={<div className="text-sm text-gray-500">{t('inventoryItems')}</div>}
             right={<>
-              <button onClick={addItem} className="px-2 py-1 border rounded text-sm">{t('addItem')}</button>
-              <button onClick={removeSelected} className="px-2 py-1 border rounded text-sm">{t('delete')}</button>
+              <button onClick={addItem} className="px-2 py-1 text-sm border rounded">{t('addItem')}</button>
+              <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">{t('delete')}</button>
             </>}
           />
           <Table columns={itemCols} rows={items} onSelect={setSel}/>
@@ -131,14 +131,14 @@ export default function InventoryPage() {
       )}
 
       {tab==='customId' && (
-        <div className="mt-3 grid gap-3">
-          <div><b>{t('preview')}:</b> <code className="px-2 py-1 bg-gray-100 dark:bg-gray-800 rounded">{idPreview}</code></div>
+        <div className="grid gap-3 mt-3">
+          <div><b>{t('preview')}:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview}</code></div>
           <div className="text-sm text-gray-500">{t('idElements')}</div>
           {elements.sort((a,b)=>a.order-b.order).map((el,idx)=>(
-            <div key={idx} className="grid md:grid-cols-4 gap-2 items-center">
+            <div key={idx} className="grid items-center gap-2 md:grid-cols-4">
               <select value={el.type} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,type:e.target.value}; setElements(next)
-              }} className="border rounded px-2 py-1">
+              }} className="px-2 py-1 border rounded">
                 <option value="FIXED">{t('fixed')}</option>
                 <option value="RAND20">{t('rand20')}</option>
                 <option value="RAND32">{t('rand32')}</option>
@@ -150,22 +150,22 @@ export default function InventoryPage() {
               </select>
               <input value={el.param||''} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,param:e.target.value}; setElements(next)
-              }} className="border rounded px-2 py-1" placeholder={t('format')}/>
+              }} className="px-2 py-1 border rounded" placeholder={t('format')}/>
               <input type="number" value={el.order} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,order:parseInt(e.target.value||'1',10)}; setElements(next)
-              }} className="border rounded px-2 py-1 w-24"/>
+              }} className="w-24 px-2 py-1 border rounded"/>
               <button onClick={()=>{
                 const next=[...elements]; next.splice(idx,1); setElements(next)
-              }} className="px-2 py-1 border rounded text-sm">{t('delete')}</button>
+              }} className="px-2 py-1 text-sm border rounded">{t('delete')}</button>
             </div>
           ))}
           <div>
             <button onClick={()=>setElements([...elements,{order:elements.length+1,type:'FIXED',param:'-'}])}
-              className="px-3 py-1 border rounded text-sm">{t('addElement')}</button>
+              className="px-3 py-1 text-sm border rounded">{t('addElement')}</button>
             <button onClick={async()=>{
               await api.post(`/api/inventories/${id}/custom-id`, { elements })
               await load()
-            }} className="ml-2 px-3 py-1 border rounded text-sm">{t('save')}</button>
+            }} className="px-3 py-1 ml-2 text-sm border rounded">{t('save')}</button>
           </div>
         </div>
       )}
@@ -173,15 +173,15 @@ export default function InventoryPage() {
       {tab==='fields' && (
         <div className="grid gap-6 mt-4">
           {['text','mtext','num','link','bool'].map(group=>(
-            <div key={group} className="border rounded p-3">
-              <div className="font-medium mb-2 uppercase">{group}</div>
+            <div key={group} className="p-3 border rounded">
+              <div className="mb-2 font-medium uppercase">{group}</div>
               {fields[group].map((f,idx)=>(
-                <div key={idx} className="grid md:grid-cols-4 gap-2 items-center mb-2">
-                  <input className="border rounded px-2 py-1" placeholder="Title" value={f.title}
+                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-4">
+                  <input className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
                     onChange={e=>{
                       const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
                     }}/>
-                  <input className="border rounded px-2 py-1" placeholder="Description" value={f.desc}
+                  <input className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
                     onChange={e=>{
                       const next = {...fields}; next[group][idx].desc = e.target.value; setFields(next)
                     }}/>
@@ -192,7 +192,7 @@ export default function InventoryPage() {
                       }}/>
                     <span>{t('showInTable')}</span>
                   </label>
-                  <button className="px-2 py-1 border rounded text-sm"
+                  <button className="px-2 py-1 text-sm border rounded"
                     onClick={async()=>{
                       await api.post(`/api/inventories/${id}/fields`, { fields })
                       await load()
@@ -230,17 +230,17 @@ function AccessTab({ id }) {
   }
   useEffect(()=>{ if(q) findUsers(q) },[q])
   return (
-    <div className="mt-3 grid gap-3">
+    <div className="grid gap-3 mt-3">
       <div className="flex gap-2">
         <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type email or name"
-          className="border rounded px-2 py-1 flex-1"/>
+          className="flex-1 px-2 py-1 border rounded"/>
       </div>
       {q && (
-        <div className="border rounded p-2">
+        <div className="p-2 border rounded">
           {users.map(u=>(
             <div key={u.id} className="flex items-center justify-between py-1">
               <div>{u.name} &lt;{u.email}&gt;</div>
-              <button className="px-2 py-1 border rounded text-sm"
+              <button className="px-2 py-1 text-sm border rounded"
                 onClick={async()=>{
                   await api.post(`/api/inventories/${id}/access`,{ userId: u.id, canWrite:true })
                   setQ(''); await load()
@@ -251,7 +251,7 @@ function AccessTab({ id }) {
       )}
       <div className="flex items-center gap-2">
         <span className="text-sm">Sort:</span>
-        <select className="border rounded px-2 py-1" value={sort} onChange={e=>setSort(e.target.value)}>
+        <select className="px-2 py-1 border rounded" value={sort} onChange={e=>setSort(e.target.value)}>
           <option value="name">name</option>
           <option value="email">email</option>
         </select>
@@ -261,13 +261,13 @@ function AccessTab({ id }) {
           <div key={x.userId} className="flex items-center justify-between px-3 py-2 border-b">
             <div>{x.name} &lt;{x.email}&gt;</div>
             <div className="flex gap-2">
-              <label className="text-sm flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={x.canWrite} onChange={async(e)=>{
                   await api.put(`/api/inventories/${id}/access/${x.userId}`, { canWrite: e.target.checked })
                   await load()
                 }}/> write
               </label>
-              <button className="px-2 py-1 border rounded text-sm"
+              <button className="px-2 py-1 text-sm border rounded"
                 onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
                 {`Remove`}
               </button>
@@ -288,10 +288,10 @@ function StatsTab({ id }) {
   })() },[id])
   if (!data) return <div className="p-4">Loading…</div>
   return (
-    <div className="grid md:grid-cols-3 gap-3 mt-3">
-      <div className="border rounded p-3"><b>Items:</b> {data.count}</div>
-      <div className="border rounded p-3"><b>Num1 avg:</b> {data.num1_avg ?? '-'}</div>
-      <div className="border rounded p-3"><b>Num2 avg:</b> {data.num2_avg ?? '-'}</div>
+    <div className="grid gap-3 mt-3 md:grid-cols-3">
+      <div className="p-3 border rounded"><b>Items:</b> {data.count}</div>
+      <div className="p-3 border rounded"><b>Num1 avg:</b> {data.num1_avg ?? '-'}</div>
+      <div className="p-3 border rounded"><b>Num2 avg:</b> {data.num2_avg ?? '-'}</div>
     </div>
   )
 }
@@ -310,8 +310,8 @@ function DiscussionTab({ id }) {
     setTxt(''); await load()
   }
   return (
-    <div className="mt-3 grid gap-3">
-      <div className="border rounded p-2">
+    <div className="grid gap-3 mt-3">
+      <div className="p-2 border rounded">
         {list.map(c=>(
           <div key={c.id} className="py-2 border-b">
             <div className="text-sm text-gray-500">{c.userName}</div>
@@ -321,8 +321,8 @@ function DiscussionTab({ id }) {
         {list.length===0 && <div className="p-4 text-center text-gray-500">No comments</div>}
       </div>
       <div className="flex gap-2">
-        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 border rounded px-2 py-1"/>
-        <button onClick={post} className="px-3 py-1 border rounded text-sm">Post</button>
+        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded"/>
+        <button onClick={post} className="px-3 py-1 text-sm border rounded">Post</button>
       </div>
     </div>
   )

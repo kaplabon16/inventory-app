@@ -1,9 +1,11 @@
+// frontend/src/store/auth.js
 import { create } from 'zustand'
 import api from '../api/client'
 
 export const useAuth = create((set, get) => ({
   user: null,
   loading: true,
+
   async loadMe() {
     try {
       const { data } = await api.get('/api/auth/me')
@@ -12,10 +14,26 @@ export const useAuth = create((set, get) => ({
       set({ user: null, loading: false })
     }
   },
-  loginGoogle() { window.location.href = `${import.meta.env.VITE_API_BASE}/api/auth/google` },
-  loginGithub() { window.location.href = `${import.meta.env.VITE_API_BASE}/api/auth/github` },
+
+  // App.jsx calls hydrate(); keep it as an alias so it never breaks
+  async hydrate() {
+    return get().loadMe()
+  },
+
+  loginGoogle() {
+    // full-page nav to backend OAuth
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/google`
+  },
+
+  loginGithub() {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/github`
+  },
+
   async logout() {
-    await api.post('/api/auth/logout')
-    set({ user: null })
-  }
+    try { await api.post('/api/auth/logout') } finally {
+      set({ user: null })
+    }
+  },
 }))
