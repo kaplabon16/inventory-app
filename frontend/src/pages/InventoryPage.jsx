@@ -44,7 +44,7 @@ export default function InventoryPage() {
   }
   useEffect(()=>{ load() },[id])
 
-  // autosave inventory settings every ~8s if changed
+  // autosave every ~8s (only if we have an inventory)
   useEffect(()=>{
     const timer = setInterval(async ()=>{
       if (!inv) return
@@ -53,17 +53,16 @@ export default function InventoryPage() {
         const { data } = await api.put(`/api/inventories/${id}`, { ...inv, version })
         setVersion(data.version)
         setSaving('saved')
-      } catch(e) {
+      } catch {
         setSaving('saved')
       }
     }, 8000)
     return ()=>clearInterval(timer)
-  },[inv, version])
+  },[inv, version, id, setSaving])
 
   const addItem = async () => {
     const { data } = await api.post(`/api/inventories/${id}/items`, { })
-    // open item page
-    window.location.href = `/inventory/${id}/item/${data.id}`
+    window.location.href = `/inventories/${id}/items/${data.id}`
   }
 
   const removeSelected = async () => {
@@ -77,7 +76,7 @@ export default function InventoryPage() {
   if (!inv) return <div className="p-6">Loading…</div>
 
   const itemCols = [
-    { key: 'customId', title: 'ID', render:(v,r)=><Link to={`/inventory/${id}/item/${r.id}`} className="text-blue-600">{v}</Link> },
+    { key: 'customId', title: 'ID', render:(v,r)=><Link to={`/inventories/${id}/items/${r.id}`} className="text-blue-600">{v}</Link> },
     ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title:f.title}] : []).flat()),
     ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title:f.title}] : []).flat()),
     ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title, render:(v)=> v ? '✓' : ''}] : []).flat())
@@ -124,7 +123,7 @@ export default function InventoryPage() {
 
           <label className="flex items-center gap-2">
             <span>{t('publicWrite')}</span>
-            <input type="checkbox" checked={inv.publicWrite}
+            <input type="checkbox" checked={!!inv.publicWrite}
                    onChange={e=>setInv({...inv, publicWrite: e.target.checked})}/>
           </label>
         </div>
@@ -170,46 +169,47 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {tab==='fields' && (
-        <div className="grid gap-6 mt-4">
-          {['text','mtext','num','link','bool'].map(group=>(
-            <div key={group} className="p-3 border rounded">
-              <div className="mb-2 font-medium uppercase">{group}</div>
-              {fields[group].map((f,idx)=>(
-                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-4">
-                  <input className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
-                    onChange={e=>{
-                      const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
-                    }}/>
-                  <input className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
-                    onChange={e=>{
-                      const next = {...fields}; next[group][idx].desc = e.target.value; setFields(next)
-                    }}/>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" checked={!!f.show}
-                      onChange={e=>{
-                        const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
-                      }}/>
-                    <span>{t('showInTable')}</span>
-                  </label>
-                  <button className="px-2 py-1 text-sm border rounded"
-                    onClick={async()=>{
-                      await api.post(`/api/inventories/${id}/fields`, { fields })
-                      await load()
-                    }}>{t('save')}</button>
-                </div>
-              ))}
+      {tab==='fields' && <FieldsTab id={id} fields={fields} setFields={setFields} load={load} />}
+      {tab==='access' && <AccessTab id={id}/> }
+      {tab==='stats' && <StatsTab id={id}/>}
+      {tab==='discussion' && <DiscussionTab id={id}/>}
+    </div>
+  )
+}
+
+function FieldsTab({ id, fields, setFields, load }) {
+  const { t } = useTranslation()
+  return (
+    <div className="grid gap-6 mt-4">
+      {['text','mtext','num','link','bool'].map(group=>(
+        <div key={group} className="p-3 border rounded">
+          <div className="mb-2 font-medium uppercase">{group}</div>
+          {fields[group].map((f,idx)=>(
+            <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-4">
+              <input className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
+                onChange={e=>{
+                  const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
+                }}/>
+              <input className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
+                onChange={e=>{
+                  const next = {...fields}; next[group][idx].desc = e.target.value; setFields(next)
+                }}/>
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={!!f.show}
+                  onChange={e=>{
+                    const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
+                  }}/>
+                <span>{t('showInTable')}</span>
+              </label>
+              <button className="px-2 py-1 text-sm border rounded"
+                onClick={async()=>{
+                  await api.post(`/api/inventories/${id}/fields`, { fields })
+                  await load()
+                }}>{t('save')}</button>
             </div>
           ))}
         </div>
-      )}
-
-      {tab==='access' && (
-        <AccessTab id={id}/>
-      )}
-
-      {tab==='stats' && <StatsTab id={id}/>}
-      {tab==='discussion' && <DiscussionTab id={id}/>}
+      ))}
     </div>
   )
 }
@@ -269,7 +269,7 @@ function AccessTab({ id }) {
               </label>
               <button className="px-2 py-1 text-sm border rounded"
                 onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
-                {`Remove`}
+                Remove
               </button>
             </div>
           </div>

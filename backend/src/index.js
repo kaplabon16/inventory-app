@@ -11,7 +11,7 @@ function normalize(u) {
   if (!u) return null
   return /^https?:\/\//i.test(u) ? u : `https://${u}`
 }
-const PRIMARY = normalize(process.env.FRONTEND_URL) // main Vercel URL
+const PRIMARY = normalize(process.env.FRONTEND_URL)
 const EXTRA = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(s => normalize(s.trim()))
@@ -21,7 +21,7 @@ const allowSet = new Set(['http://localhost:5173', PRIMARY, ...EXTRA].filter(Boo
 
 const corsMiddleware = cors({
   origin(origin, cb) {
-    if (!origin) return cb(null, true) // curl/postman/etc.
+    if (!origin) return cb(null, true)
     try {
       const u = new URL(origin)
       const ok = allowSet.has(u.origin) || /\.vercel\.app$/i.test(u.hostname)
@@ -44,23 +44,22 @@ app.use(morgan('tiny'))
 
 app.get('/api/health', (_req,res)=>res.json({ok:true}))
 
-// Auth is mounted at /api/auth
+// Auth
 app.use('/api/auth', authRoutes)
 
-// Mount only the routes you actually have:
+// Mount feature routes
 async function mount(modulePath, basePath) {
   try {
     const mod = await import(modulePath)
     app.use(basePath, mod.default)
     console.log(`Mounted ${basePath}`)
-  } catch {
-    // skip if missing
+  } catch (e) {
+    console.log(`Skipped ${basePath}:`, e?.message)
   }
 }
 await mount('./routes/inventoryRoutes.js', '/api/inventories')
-await mount('./routes/itemRoutes.js', '/api/items')
 await mount('./routes/searchRoutes.js', '/api/search')
-await mount('./routes/userRoutes.js', '/api/users') // <-- FIX: needed by Access tab
+await mount('./routes/userRoutes.js', '/api/users') // ✅ was missing
 
 app.use((req,res)=>res.status(404).json({ error:'Not found', path: req.originalUrl }))
 
