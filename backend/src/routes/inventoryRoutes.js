@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 import { requireAuth } from '../middleware/auth.js'
-import { isOwnerOrAdmin } from '../utils/validators.js'
+import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
+import { generateCustomId } from '../utils/customId.js'
 
 const prisma = new PrismaClient()
 const router = Router()
 
-// list (home page), mine, canWrite
+// list
 router.get('/', async (req,res)=>{
   const { mine, canWrite } = req.query
   const userId = req.user?.id
@@ -38,12 +39,12 @@ router.get('/', async (req,res)=>{
 router.post('/', requireAuth, async (req,res)=>{
   const { title, description, categoryId } = req.body
   const inv = await prisma.inventory.create({
-    data: { title, description: description||'', ownerId: req.user.id, categoryId: Number(categoryId||1) }
+    data: { title: title || 'New Inventory', description: description||'', ownerId: req.user.id, categoryId: Number(categoryId||1) }
   })
   res.json(inv)
 })
 
-// get one (with fields, id elements, items for table)
+// get one (with fields, id elements, items)
 router.get('/:id', async (req,res)=>{
   const inv = await prisma.inventory.findUnique({ where:{ id:req.params.id }, include:{ category:true }})
   if (!inv) return res.status(404).json({ error:'Not found' })
@@ -62,7 +63,7 @@ router.get('/:id', async (req,res)=>{
   })
 })
 
-// update inventory (optimistic lock via updateMany)
+// update inventory
 router.put('/:id', requireAuth, async (req,res)=>{
   const inv = await prisma.inventory.findUnique({ where:{ id:req.params.id }})
   if (!inv) return res.status(404).json({ error:'Not found' })
@@ -110,6 +111,94 @@ router.post('/:id/custom-id', requireAuth, async (req,res)=>{
   })
   res.json({ ok:true })
 })
+
+/* ---------------- Items CRUD (this was missing) ---------------- */
+async function getWriteGuard(req, invId) {
+  const inv = await prisma.inventory.findUnique({ where:{ id: invId } })
+  if (!inv) return { status: 404, error: 'Not found' }
+  const accessList = await prisma.inventoryAccess.findMany({ where:{ inventoryId: inv.id }})
+  if (!canWriteInventory(req.user, inv, accessList)) return { status: 403, error: 'Forbidden' }
+  return { inv }
+}
+
+// Create item
+router.post('/:id/items', requireAuth, async (req,res)=>{
+  const g = await getWriteGuard(req, req.params.id)
+  if (g.error) return res.status(g.status).json({ error: g.error })
+  const customId = await generateCustomId(g.inv.id)
+  const item = await prisma.item.create({
+    data: { inventoryId: g.inv.id, customId, createdById: req.user.id }
+  })
+  res.json(item)
+})
+
+// Read single item (+ return fields pack to render the form)
+router.get('/:id/items/:itemId', requireAuth, async (req,res)=>{
+  const [inv, item] = await Promise.all([
+    prisma.inventory.findUnique({ where:{ id: req.params.id }}),
+    prisma.item.findUnique({ where:{ id: req.params.itemId }})
+  ])
+  if (!inv || !item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Not found' })
+
+  const fields = await prisma.inventoryField.findMany({ where:{ inventoryId: inv.id }})
+  const pack = (type) => [1,2,3].map(slot=>{
+    const x = fields.find(f=>f.type===type && f.slot===slot)
+    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
+  })
+  res.json({
+    item,
+    fields: { text:pack('TEXT'), mtext:pack('MTEXT'), num:pack('NUMBER'), link:pack('LINK'), bool:pack('BOOL') },
+  })
+})
+
+// Update item
+router.put('/:id/items/:itemId', requireAuth, async (req,res)=>{
+  const g = await getWriteGuard(req, req.params.id)
+  if (g.error) return res.status(g.status).json({ error: g.error })
+
+  const allowed = [
+    'customId',
+    'text1','text2','text3',
+    'mtext1','mtext2','mtext3',
+    'num1','num2','num3',
+    'link1','link2','link3',
+    'bool1','bool2','bool3',
+  ]
+  const data = {}
+  for (const k of allowed) if (k in req.body) data[k] = req.body[k]
+
+  try {
+    const updated = await prisma.item.update({
+      where: { id: req.params.itemId },
+      data,
+    })
+    res.json(updated)
+  } catch {
+    res.status(404).json({ error: 'Not found' })
+  }
+})
+
+// Delete item
+router.delete('/:id/items/:itemId', requireAuth, async (req,res)=>{
+  const g = await getWriteGuard(req, req.params.id)
+  if (g.error) return res.status(g.status).json({ error: g.error })
+  try {
+    await prisma.item.delete({ where: { id: req.params.itemId } })
+    res.json({ ok:true })
+  } catch {
+    res.status(404).json({ error: 'Not found' })
+  }
+})
+
+// Bulk delete
+router.post('/:id/items/bulk-delete', requireAuth, async (req,res)=>{
+  const g = await getWriteGuard(req, req.params.id)
+  if (g.error) return res.status(g.status).json({ error: g.error })
+  const ids = Array.isArray(req.body.ids) ? req.body.ids : []
+  await prisma.item.deleteMany({ where: { id: { in: ids }, inventoryId: g.inv.id } })
+  res.json({ ok:true })
+})
+/* ---------------------------------------------------------------- */
 
 // Access management
 router.get('/:id/access', requireAuth, async (req,res)=>{
