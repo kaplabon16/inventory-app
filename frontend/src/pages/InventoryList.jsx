@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import api, { apiUrl } from '../api/client'
+import api from '../api/client'
 import { useAuth } from '../store/auth'
 
 export default function InventoryList() {
@@ -13,10 +13,9 @@ export default function InventoryList() {
   const load = async () => {
     setError('')
     try {
-      const { data } = await api.get(apiUrl('/inventories'))
-      // backend may return { data: [...] } or direct array
+      const { data } = await api.get('/api/inventories')
       setRows(Array.isArray(data) ? data : (data?.data || []))
-    } catch (e) {
+    } catch {
       setRows([])
       setError('Failed to load inventories.')
     }
@@ -32,11 +31,8 @@ export default function InventoryList() {
     setLoading(true)
     setError('')
     try {
-      const { data } = await api.post(
-        apiUrl('/inventories'),
-        { title: 'New Inventory', description: '', categoryId: 1 }
-      )
-      const id = data?.id || data?.inventory?.id
+      const { data } = await api.post('/api/inventories', { title: 'New Inventory', description: '', categoryId: 1 })
+      const id = data?.id
       if (id) nav(`/inventories/${id}`)
       else {
         setLoading(false)

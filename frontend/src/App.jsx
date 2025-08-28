@@ -1,8 +1,10 @@
+// frontend/src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import "./styles.css"
 import "./i18n"
-import { useEffect } from 'react'
-import { useAuth } from './store/auth'
+import { useEffect } from "react"
+import { useAuth } from "./store/auth"
+
 import Header from "./components/Header"
 import Home from "./pages/Home"
 import Login from "./pages/Login"
@@ -17,21 +19,20 @@ import Search from "./pages/Search"
 import ProtectedRoute from "./routes/ProtectedRoute"
 
 export default function App() {
-  useEffect(() => { useAuth.getState().hydrate() }, [])
+  // hydrate current user (fixes "r is not a function" — use existing loadMe)
+  useEffect(() => { useAuth.getState().loadMe() }, [])
 
   return (
     <BrowserRouter>
-      {/* Root wrapper with proper dark/light contrast */}
       <div className="flex flex-col min-h-screen text-gray-900 transition-colors duration-300 bg-white dark:bg-gray-900 dark:text-gray-100">
-        {/* Header always visible */}
         <Header />
-
-        {/* Main content */}
         <main className="flex-1 p-4">
           <Routes>
             <Route path="/" element={<Home />} />
+            <Route path="/search" element={<Search />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+
             <Route
               path="/profile"
               element={
@@ -40,6 +41,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+
             <Route
               path="/inventories"
               element={
@@ -56,14 +58,10 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/items/:id"
-              element={
-                <ProtectedRoute>
-                  <ItemPage />
-                </ProtectedRoute>
-              }
-            />
+
+            {/* Item page should be public (read-only allowed for all users) */}
+            <Route path="/items/:id" element={<ItemPage />} />
+
             <Route
               path="/admin"
               element={
@@ -72,7 +70,6 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/search" element={<Search />} />
           </Routes>
         </main>
       </div>
