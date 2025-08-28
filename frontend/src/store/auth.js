@@ -15,17 +15,12 @@ export const useAuth = create((set, get) => ({
     }
   },
 
-  // App.jsx calls hydrate(); keep it as an alias so it never breaks
-  async hydrate() {
-    return get().loadMe()
-  },
+  async hydrate() { return get().loadMe() },
 
   loginGoogle() {
-    // full-page nav to backend OAuth
     const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
     window.location.href = `${base}/api/auth/google`
   },
-
   loginGithub() {
     const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
     window.location.href = `${base}/api/auth/github`
@@ -34,6 +29,8 @@ export const useAuth = create((set, get) => ({
   async logout() {
     try { await api.post('/api/auth/logout') } finally {
       set({ user: null })
+      // hard refresh so cookies/session state are clean
+      window.location.href = '/'
     }
   },
 }))

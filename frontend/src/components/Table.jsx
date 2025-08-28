@@ -1,7 +1,10 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 
-export default function Table({ columns, rows, onSelect }) {
+export default function Table({ columns, rows, onSelect, rowLink, emptyText = 'No data' }) {
   const [selected, setSelected] = useState(new Set())
+  const nav = useNavigate()
+
   const toggle = (id) => {
     const next = new Set(selected)
     next.has(id) ? next.delete(id) : next.add(id)
@@ -15,6 +18,7 @@ export default function Table({ columns, rows, onSelect }) {
     setSelected(next)
     onSelect?.([...next])
   }
+
   return (
     <div className="overflow-auto border rounded">
       <table className="min-w-full text-sm">
@@ -29,17 +33,28 @@ export default function Table({ columns, rows, onSelect }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => (
-            <tr key={r.id} className="border-t hover:bg-gray-50 dark:hover:bg-gray-800">
-              <td className="w-10 p-2">
-                <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggle(r.id)}/>
-              </td>
-              {columns.map(c => (
-                <td key={c.key} className="p-2">{c.render ? c.render(r[c.key], r) : r[c.key]}</td>
-              ))}
+          {rows.map(r => {
+            const clickable = typeof rowLink === 'function'
+            return (
+              <tr
+                key={r.id}
+                className={`border-t ${clickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''}`}
+                onClick={() => clickable && nav(rowLink(r))}
+              >
+                <td className="w-10 p-2">
+                  <input type="checkbox" checked={selected.has(r.id)} onChange={(e)=>{ e.stopPropagation(); toggle(r.id) }}/>
+                </td>
+                {columns.map(c => (
+                  <td key={c.key} className="p-2">{c.render ? c.render(r[c.key], r) : r[c.key]}</td>
+                ))}
+              </tr>
+            )
+          })}
+          {rows.length===0 && (
+            <tr>
+              <td colSpan={columns.length+1} className="p-6 text-center text-gray-500">{emptyText}</td>
             </tr>
-          ))}
-          {rows.length===0 && <tr><td colSpan={columns.length+1} className="p-6 text-center text-gray-500">No data</td></tr>}
+          )}
         </tbody>
       </table>
     </div>

@@ -10,21 +10,21 @@ export default function Admin() {
   const [sel, setSel] = useState([])
 
   const load = async () => {
-    const { data } = await api.get('/api/users')
-    setRows(data)
+    const { data } = await api.get('/api/admin/users')
+    setRows(data?.items || data || [])
   }
   useEffect(()=>{ load() },[])
 
   const act = (path) => async () => {
     if (sel.length===0) return
-    await api.post(`/api/users/${path}`, { ids: sel })
+    await api.patch(`/api/admin/users/${sel[0]}/${path}`)
     setSel([]); await load()
   }
 
   const cols = [
     { key: 'name', title: 'Name' },
     { key: 'email', title: 'Email' },
-    { key: 'roles', title: 'Roles', render:v => v?.join(', ') },
+    { key: 'roles', title: 'Roles', render:v => (v||[]).join(', ') },
     { key: 'blocked', title: t('blocked'), render:v=> v ? 'Yes' : 'No' }
   ]
 

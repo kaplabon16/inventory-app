@@ -1,27 +1,18 @@
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
-
 const prisma = new PrismaClient()
 const router = Router()
 
-// Full-text search across items + inventory title.
-// Uses Postgres websearch_to_tsquery for natural queries (e.g. "laptop 2024").
-// Falls back to LIKE via the OR clause.
+// GET /api/search?q=...
 router.get('/', async (req, res) => {
   const q = (req.query.q || '').toString().trim()
   if (!q) return res.json({ items: [] })
-
   try {
-    // Parameterized raw SQL (safe) — no string concat
     const like = `%${q}%`
     const rows = await prisma.$queryRaw`
-      SELECT i.id,
-             i."inventoryId",
-             i."customId",
+      SELECT i.id, i."inventoryId", i."customId",
              inv.title AS "invTitle",
-             i.text1 AS t1,
-             i.text2 AS t2,
-             i.text3 AS t3
+             i.text1 AS t1, i.text2 AS t2, i.text3 AS t3
       FROM "Item" i
       JOIN "Inventory" inv ON inv.id = i."inventoryId"
       WHERE (
@@ -43,9 +34,7 @@ router.get('/', async (req, res) => {
     `
     res.json({ items: rows })
   } catch (e) {
-    console.error(e)
-    res.status(500).json({ error: 'Search failed' })
+    console.error(e); res.status(500).json({ error:'Search failed' })
   }
 })
-
 export default router

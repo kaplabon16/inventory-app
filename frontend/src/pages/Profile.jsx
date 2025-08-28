@@ -17,14 +17,17 @@ export default function Profile() {
       api.get('/api/inventories?mine=1'),
       api.get('/api/inventories?canWrite=1')
     ])
-    setOwned(a.data)
-    setWrite(b.data)
+    setOwned(a.data || [])
+    setWrite(b.data || [])
   }
-  useEffect(()=>{ loadMe(); load() },[])
+
+  useEffect(() => { loadMe(); load() }, [])
+
   const cols = [
-    { key: 'title', title: t('title'), render:(v,r)=><Link to={`/inventory/${r.id}`} className="text-blue-600">{v}</Link> },
+    { key: 'title', title: t('title'), render: (v, r) => <Link to={`/inventories/${r.id}`} className="text-blue-600">{v}</Link> },
     { key: 'itemsCount', title: t('items') }
   ]
+
   return (
     <div className="max-w-6xl p-4 mx-auto">
       <h1 className="mb-2 text-xl font-semibold">{user?.name}</h1>

@@ -9,9 +9,8 @@ const getInitialTheme = () => {
 
 export const useUI = create((set) => ({
   theme: getInitialTheme(),
-  toggleTheme: () => set((s) => ({ theme: s.theme === "light" ? "dark" : "light" })),
-
-  // ✅ Inventory autosave feedback
-  autosaveState: "saved", // 'saving' | 'saved'
-  setSaving: (state) => set({ autosaveState: state }),
+  toggleTheme: () =>
+    set((state) => ({
+      theme: state.theme === "light" ? "dark" : "light",
+    })),
 }))
