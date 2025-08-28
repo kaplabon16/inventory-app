@@ -1,7 +1,9 @@
-export function requireAdmin(req, res, next) {
-  const roles = (req.user?.roles || []).map(r => r.toLowerCase())
-  if (!roles.includes('admin')) {
-    return res.status(403).json({ error: 'Admin only' })
+// backend/src/middleware/requireAdmin.js
+export function requireAdmin(req, _res, next) {
+  const roles = req.user?.roles || [];
+  const isAdmin = roles.includes('ADMIN') || roles.includes('admin');
+  if (!isAdmin) {
+    return _res.status(403).json({ error: 'Admin only' });
   }
-  next()
+  next();
 }
