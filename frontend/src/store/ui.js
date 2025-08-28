@@ -1,4 +1,3 @@
-// frontend/src/store/ui.js
 import { create } from "zustand"
 
 const getInitialTheme = () => {
@@ -14,7 +13,8 @@ export const useUI = create((set) => ({
     set((state) => ({
       theme: state.theme === "light" ? "dark" : "light",
     })),
-  // Added for InventoryPage autosave indicator
-  autosaveState: 'saved', // 'saving' | 'saved'
+
+  // Added so InventoryPage autosave doesn't crash
+  autosaveState: "saved", // 'saving' | 'saved'
   setSaving: (state) => set({ autosaveState: state }),
 }))

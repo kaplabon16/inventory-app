@@ -45,8 +45,8 @@ router.get(
     failureRedirect: `${frontendBase}/login?err=google`,
   }),
   async (req, res) => {
-    // req.user was prepared by passport strategy
-    setCookieToken(res, req.user)
+    const safe = { id: req.user.id, email: req.user.email, name: req.user.name, roles: req.user.roles, blocked: req.user.blocked }
+    setCookieToken(res, safe)
     res.redirect(`${frontendBase}/`)
   }
 )
@@ -60,7 +60,8 @@ router.get(
     failureRedirect: `${frontendBase}/login?err=github`,
   }),
   async (req, res) => {
-    setCookieToken(res, req.user)
+    const safe = { id: req.user.id, email: req.user.email, name: req.user.name, roles: req.user.roles, blocked: req.user.blocked }
+    setCookieToken(res, safe)
     res.redirect(`${frontendBase}/`)
   }
 )
@@ -89,8 +90,9 @@ router.post('/register', async (req, res) => {
     })
 
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
-    setCookieToken(res, safe)
-    res.json(safe)
+    const token = setCookieToken(res, safe)
+    // Return token so frontend can bounce to set cookie in top-level nav if needed
+    res.json({ user: safe, token })
   } catch (e) {
     console.error('REGISTER_ERR', e)
     res.status(500).json({ error: 'SERVER_ERROR' })
@@ -121,8 +123,8 @@ router.post('/login', async (req, res) => {
     if (!ok) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
 
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
-    setCookieToken(res, safe)
-    res.json(safe)
+    const token = setCookieToken(res, safe)
+    res.json({ user: safe, token })
   } catch (e) {
     console.error('LOGIN_ERR', e)
     res.status(500).json({ error: 'SERVER_ERROR' })
@@ -173,6 +175,20 @@ router.get('/me', async (req, res) => {
 router.post('/logout', (req, res) => {
   res.clearCookie('token', { sameSite: 'none', secure: true })
   res.json({ ok: true })
+})
+
+// ---------- Bounce for cross-site cookie (email/pw flows) ----------
+router.get('/bounce', (req, res) => {
+  try {
+    const { token, next } = req.query
+    if (!token) return res.status(400).send('Missing token')
+    const payload = jwt.verify(token, process.env.JWT_SECRET)
+    setCookieToken(res, payload)
+    const dest = next && /^https?:\/\//i.test(next) ? next : frontendBase
+    res.redirect(dest)
+  } catch {
+    res.status(400).send('Invalid token')
+  }
 })
 
 export default router

@@ -8,7 +8,7 @@ import { useTranslation } from "react-i18next"
 
 export default function Header() {
   const { t } = useTranslation()
-  const { user, logout } = useAuth()
+  const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -16,9 +16,13 @@ export default function Header() {
   const url = new URLSearchParams(location.search)
   const [term, setTerm] = useState(url.get("q") || "")
 
+  const goLogin = () => navigate("/login")
+  const goProfile = () => navigate("/profile")
+
   const onSubmit = (e) => {
     e.preventDefault()
     const q = term.trim()
+    // Always navigate to /search?q=...
     navigate(`/search?q=${encodeURIComponent(q)}`)
   }
 
@@ -30,7 +34,7 @@ export default function Header() {
           {t("app")}
         </Link>
 
-        {/* Global Search */}
+        {/* Global Search (always visible) */}
         <form onSubmit={onSubmit} className="flex-1 max-w-xl ml-3">
           <label className="sr-only" htmlFor="global-search">
             {t("search")}
@@ -60,32 +64,45 @@ export default function Header() {
         <div className="flex items-center gap-2 ml-auto">
           {!user ? (
             <button
-              onClick={() => navigate("/login")}
+              onClick={goLogin}
               className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               {t("login")}
             </button>
           ) : (
             <>
+              <Link
+                to="/inventories"
+                className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                {t("inventories")}
+              </Link>
               <button
-                onClick={() => navigate("/profile")}
+                onClick={goProfile}
                 className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
               >
                 {t("profile")}
               </button>
-              <button
-                onClick={logout}
-                className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-                title={t("logout")}
-              >
-                {t("logout")}
-              </button>
+              <LogoutButton />
             </>
           )}
+
           <ThemeToggle />
           <LangToggle />
         </div>
       </div>
     </header>
+  )
+}
+
+function LogoutButton() {
+  const { logout } = useAuth()
+  return (
+    <button
+      onClick={logout}
+      className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+    >
+      Logout
+    </button>
   )
 }

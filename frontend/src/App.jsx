@@ -1,4 +1,3 @@
-// frontend/src/App.jsx
 import { BrowserRouter, Routes, Route } from "react-router-dom"
 import "./styles.css"
 import "./i18n"
@@ -14,6 +13,7 @@ import InventoryPage from "./pages/InventoryPage"
 import ItemPage from "./pages/ItemPage"
 import Admin from "./pages/Admin"
 import Search from "./pages/Search"
+
 import ProtectedRoute from "./routes/ProtectedRoute"
 
 export default function App() {
@@ -21,19 +21,58 @@ export default function App() {
 
   return (
     <BrowserRouter>
+      {/* Root wrapper with proper dark/light contrast */}
       <div className="flex flex-col min-h-screen text-gray-900 transition-colors duration-300 bg-white dark:bg-gray-900 dark:text-gray-100">
+        {/* Header always visible */}
         <Header />
+
+        {/* Main content */}
         <main className="flex-1 p-4">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/inventories" element={<ProtectedRoute><InventoryList /></ProtectedRoute>} />
-            <Route path="/inventories/:id" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
-            {/* FIX: item route needs both id and itemId */}
-            <Route path="/inventories/:id/item/:itemId" element={<ProtectedRoute><ItemPage /></ProtectedRoute>} />
-            <Route path="/admin" element={<ProtectedRoute><Admin /></ProtectedRoute>} />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventories"
+              element={
+                <ProtectedRoute>
+                  <InventoryList />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/inventories/:id"
+              element={
+                <ProtectedRoute>
+                  <InventoryPage />
+                </ProtectedRoute>
+              }
+            />
+            {/* FIX: match the links used by InventoryPage/Search */}
+            <Route
+              path="/inventory/:id/item/:itemId"
+              element={
+                <ProtectedRoute>
+                  <ItemPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <Admin />
+                </ProtectedRoute>
+              }
+            />
             <Route path="/search" element={<Search />} />
           </Routes>
         </main>

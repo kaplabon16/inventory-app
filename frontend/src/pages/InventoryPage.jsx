@@ -1,4 +1,3 @@
-// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import api from '../api/client'
@@ -54,17 +53,17 @@ export default function InventoryPage() {
         const { data } = await api.put(`/api/inventories/${id}`, { ...inv, version })
         setVersion(data.version)
         setSaving('saved')
-      } catch {
+      } catch(e) {
         setSaving('saved')
       }
     }, 8000)
     return ()=>clearInterval(timer)
-  },[inv, version, id, setSaving])
+  },[inv, version])
 
   const addItem = async () => {
     const { data } = await api.post(`/api/inventories/${id}/items`, { })
-    // open item page (plural route + itemId)
-    window.location.href = `/inventories/${id}/item/${data.id}`
+    // open item page
+    window.location.href = `/inventory/${id}/item/${data.id}`
   }
 
   const removeSelected = async () => {
@@ -78,10 +77,10 @@ export default function InventoryPage() {
   if (!inv) return <div className="p-6">Loading…</div>
 
   const itemCols = [
-    { key: 'customId', title: 'ID', render:(v,r)=><Link to={`/inventories/${id}/item/${r.id}`} className="text-blue-600">{v}</Link> },
+    { key: 'customId', title: 'ID', render:(v,r)=><Link to={`/inventory/${id}/item/${r.id}`} className="text-blue-600">{v}</Link> },
     ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title:f.title}] : []).flat()),
     ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title:f.title}] : []).flat()),
-    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title, render:(vv)=> vv ? '✓' : ''}] : []).flat())
+    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title, render:(v)=> v ? '✓' : ''}] : []).flat())
   ]
 
   return (
@@ -205,7 +204,10 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {tab==='access' && (<AccessTab id={id}/>)}
+      {tab==='access' && (
+        <AccessTab id={id}/>
+      )}
+
       {tab==='stats' && <StatsTab id={id}/>}
       {tab==='discussion' && <DiscussionTab id={id}/>}
     </div>
@@ -267,7 +269,7 @@ function AccessTab({ id }) {
               </label>
               <button className="px-2 py-1 text-sm border rounded"
                 onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
-                Remove
+                {`Remove`}
               </button>
             </div>
           </div>

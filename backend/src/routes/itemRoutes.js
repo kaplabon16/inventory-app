@@ -1,26 +1,19 @@
-// backend/src/routes/itemRoutes.js
 import { Router } from 'express'
 import { PrismaClient } from '@prisma/client'
 
 const prisma = new PrismaClient()
 const router = Router()
 
-/**
- * Back-compat search endpoint:
- *   GET /api/items?q=term
- * Same result shape as /api/search:
- *   { items: [{ id, inventoryId, customId, invTitle, t1, t2, t3 }, ...] }
- *
- * If you don’t need this duplication, you can delete this file
- * and remove its mount in index.js.
- */
+// Full-text search across items + inventory title.
+// Uses Postgres websearch_to_tsquery for natural queries (e.g. "laptop 2024").
+// Falls back to LIKE via the OR clause.
 router.get('/', async (req, res) => {
   const q = (req.query.q || '').toString().trim()
   if (!q) return res.json({ items: [] })
 
   try {
+    // Parameterized raw SQL (safe) — no string concat
     const like = `%${q}%`
-    // Parameterized raw SQL (safe): Postgres full-text search + LIKE fallback
     const rows = await prisma.$queryRaw`
       SELECT i.id,
              i."inventoryId",
@@ -50,26 +43,8 @@ router.get('/', async (req, res) => {
     `
     res.json({ items: rows })
   } catch (e) {
-    console.error('ITEMS_SEARCH_ERR', e)
+    console.error(e)
     res.status(500).json({ error: 'Search failed' })
-  }
-})
-
-/**
- * Optional helper:
- * GET /api/items/:id  → fetch a single item (read-only)
- * Not used by your current frontend, but harmless & handy.
- */
-router.get('/:id', async (req, res) => {
-  try {
-    const item = await prisma.item.findUnique({
-      where: { id: req.params.id },
-      include: { inventory: { select: { id: true, title: true } } }
-    })
-    if (!item) return res.status(404).json({ error: 'Item not found' })
-    res.json(item)
-  } catch (e) {
-    res.status(500).json({ error: 'Failed to load item' })
   }
 })
 

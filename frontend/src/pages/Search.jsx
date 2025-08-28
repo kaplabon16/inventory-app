@@ -21,8 +21,8 @@ export default function Search() {
     { key: 't1', title: 'T1' }, { key: 't2', title: 'T2' }, { key: 't3', title: 'T3' }
   ]
   return (
-    <div className="max-w-6xl mx-auto p-4">
-      <div className="text-sm text-gray-500 mb-2">{t('search')}: <b>{q}</b></div>
+    <div className="max-w-6xl p-4 mx-auto">
+      <div className="mb-2 text-sm text-gray-500">{t('search')}: <b>{q}</b></div>
       <Table columns={cols} rows={rows}/>
     </div>
   )
