@@ -37,7 +37,7 @@ export default function Header() {
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
   return (
-    <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-black/80 backdrop-blur">
       <div className="flex items-center max-w-6xl gap-3 px-4 py-3 mx-auto">
         <Link to="/" className="text-xl font-semibold tracking-tight">{t("app")}</Link>
 
@@ -52,33 +52,33 @@ export default function Header() {
               placeholder={`${t("search")} (Ctrl/Cmd+K)`}
               value={term}
               onChange={(e) => setTerm(e.target.value)}
-              className="w-full rounded-l-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-l-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-black text-gray-900 dark:text-gray-100 px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
             />
-            <button type="submit" className="rounded-r-md border border-l-0 border-gray-300 dark:border-gray-700 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t("search")} title={t("search")}>🔎</button>
+            <button type="submit" className="rounded-r-md border border-l-0 border-gray-300 dark:border-gray-700 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-900" aria-label={t("search")} title={t("search")}>🔎</button>
           </div>
         </form>
 
         <div className="flex items-center gap-2 ml-auto">
           {!user ? (
             <>
-              <Link to="/login" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <Link to="/login" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">
                 {t("login")}
               </Link>
-              <Link to="/register" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <Link to="/register" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">
                 Register
               </Link>
             </>
           ) : (
             <>
-              <button onClick={()=>navigate("/profile")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={()=>navigate("/profile")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">
                 {t("profile")}
               </button>
               {isAdmin && (
-                <button onClick={()=>navigate('/admin')} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                <button onClick={()=>navigate('/admin')} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">
                   {t("admin")}
                 </button>
               )}
-              <button onClick={logout} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={logout} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">
                 {t("logout")}
               </button>
             </>
