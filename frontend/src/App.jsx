@@ -13,7 +13,9 @@ import InventoryPage from "./pages/InventoryPage"
 import ItemPage from "./pages/ItemPage"
 import Admin from "./pages/Admin"
 import Search from "./pages/Search"
+
 import ProtectedRoute from "./routes/ProtectedRoute"
+import AdminRoute from "./routes/AdminRoute" // NEW
 
 export default function App() {
   useEffect(() => { useAuth.getState().hydrate() }, [])
@@ -27,47 +29,11 @@ export default function App() {
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/inventories"
-              element={
-                <ProtectedRoute>
-                  <InventoryList />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/inventories/:id"
-              element={
-                <ProtectedRoute>
-                  <InventoryPage />
-                </ProtectedRoute>
-              }
-            />
-            {/* Fix the broken route: Item lives under inventory */}
-            <Route
-              path="/inventories/:id/item/:itemId"
-              element={
-                <ProtectedRoute>
-                  <ItemPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute>
-                  <Admin />
-                </ProtectedRoute>
-              }
-            />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/inventories" element={<ProtectedRoute><InventoryList /></ProtectedRoute>} />
+            <Route path="/inventories/:id" element={<ProtectedRoute><InventoryPage /></ProtectedRoute>} />
+            <Route path="/inventories/:id/item/:itemId" element={<ProtectedRoute><ItemPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
             <Route path="/search" element={<Search />} />
           </Routes>
         </main>

@@ -21,7 +21,6 @@ export default function Header() {
     navigate(`/search?q=${encodeURIComponent(q)}`)
   }
 
-  // Focus search with Cmd/Ctrl+K
   useEffect(() => {
     const handler = (e) => {
       const isMac = navigator.platform.toUpperCase().includes('MAC')
@@ -36,9 +35,6 @@ export default function Header() {
   }, [])
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
-
-  // Build an "admin" hop: if not logged in, hitting /admin triggers login and bounces back
-  const goAdmin = () => navigate('/admin')
 
   return (
     <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
@@ -65,14 +61,6 @@ export default function Header() {
         <div className="flex items-center gap-2 ml-auto">
           {!user ? (
             <>
-              {/* Always-visible tiny Admin link requested */}
-              <button
-                onClick={goAdmin}
-                className="px-2 py-1 text-xs underline underline-offset-2 hover:no-underline"
-                title="Admin"
-              >
-                Admin
-              </button>
               <Link to="/login" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                 {t("login")}
               </Link>
@@ -85,14 +73,9 @@ export default function Header() {
               <button onClick={()=>navigate("/profile")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                 {t("profile")}
               </button>
-              {isAdmin ? (
-                <button onClick={goAdmin} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              {isAdmin && (
+                <button onClick={()=>navigate('/admin')} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                   {t("admin")}
-                </button>
-              ) : (
-                // Even non-admins see this as an entry point; Admin gate is handled server-side
-                <button onClick={goAdmin} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                  Admin
                 </button>
               )}
               <button onClick={logout} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
