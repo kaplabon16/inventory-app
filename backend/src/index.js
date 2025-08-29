@@ -4,7 +4,13 @@ import express from 'express'
 import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
 import cors from 'cors'
+
+// STATIC imports (no dynamic import)
 import authRoutes from './routes/authRoutes.js'
+import inventoryRoutes from './routes/inventoryRoutes.js'
+import searchRoutes from './routes/searchRoutes.js'
+import adminRoutes from './routes/adminRoutes.js'
+import userRoutes from './routes/userRoutes.js'
 
 const app = express()
 
@@ -12,7 +18,8 @@ function normalize(u) {
   if (!u) return null
   return /^https?:\/\//i.test(u) ? u : `https://${u}`
 }
-const PRIMARY = normalize(process.env.FRONTEND_URL) // main Vercel URL
+
+const PRIMARY = normalize(process.env.FRONTEND_URL) // your Vercel URL
 const EXTRA = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(s => normalize(s.trim()))
@@ -22,7 +29,7 @@ const allowSet = new Set(['http://localhost:5173', PRIMARY, ...EXTRA].filter(Boo
 
 const corsMiddleware = cors({
   origin(origin, cb) {
-    if (!origin) return cb(null, true) // curl/postman/etc.
+    if (!origin) return cb(null, true)
     try {
       const u = new URL(origin)
       const ok = allowSet.has(u.origin) || /\.vercel\.app$/i.test(u.hostname)
@@ -44,23 +51,12 @@ app.use(morgan('tiny'))
 
 app.get('/api/health', (_req,res)=>res.json({ok:true}))
 
-// Auth
+// Mount routes (these were missing in prod due to failed dynamic import)
 app.use('/api/auth', authRoutes)
-
-// Routes
-async function mount(modulePath, basePath) {
-  try {
-    const mod = await import(modulePath)
-    app.use(basePath, mod.default)
-    console.log(`Mounted ${basePath}`)
-  } catch {
-    // skip if missing
-  }
-}
-await mount('./routes/inventoryRoutes.js', '/api/inventories')
-await mount('./routes/searchRoutes.js', '/api/search')
-await mount('./routes/adminRoutes.js', '/api/admin')
-await mount('./routes/userRoutes.js', '/api/users')
+app.use('/api/inventories', inventoryRoutes)
+app.use('/api/search', searchRoutes)
+app.use('/api/admin', adminRoutes)
+app.use('/api/users', userRoutes)
 
 app.use((req,res)=>res.status(404).json({ error:'Not found', path: req.originalUrl }))
 
