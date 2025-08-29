@@ -198,3 +198,219 @@ export default function InventoryPage() {
                 <option value="GUID">GUID</option>
                 <option value="DATE">Date/time</option>
                 <option value="SEQ">Sequence</option>
+              </select>
+              <input disabled={!canEdit} value={el.param||''} onChange={e=>{
+                const next=[...elements]; next[idx]={...el,param:e.target.value}; setElements(next)
+              }} className="px-2 py-1 border rounded" placeholder="Format/value"/>
+              <input disabled={!canEdit} type="number" value={el.order} onChange={e=>{
+                const next=[...elements]; next[idx]={...el,order:parseInt(e.target.value||'1',10)}; setElements(next)
+              }} className="w-24 px-2 py-1 border rounded"/>
+              {canEdit && (
+                <button onClick={()=>{
+                  const next=[...elements]; next.splice(idx,1); setElements(next)
+                }} className="px-2 py-1 text-sm border rounded">Delete</button>
+              )}
+            </div>
+          ))}
+          {canEdit && (
+            <div>
+              <button onClick={()=>setElements([...elements,{order:elements.length+1,type:'FIXED',param:'-'}])}
+                className="px-3 py-1 text-sm border rounded">Add element</button>
+              <button onClick={async()=>{
+                await api.post(`/api/inventories/${id}/custom-id`, { elements })
+                await load(); toast('Saved ID pattern')
+              }} className="px-3 py-1 ml-2 text-sm border rounded">Save</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==='fields' && (
+        <div className="grid gap-6 mt-4">
+          {['text','mtext','num','link','bool'].map(group=>(
+            <div key={group} className="p-3 border rounded">
+              <div className="mb-2 font-medium uppercase">{group}</div>
+              {fields[group].map((f,idx)=>(
+                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-4">
+                  <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
+                    onChange={e=>{
+                      const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
+                    }}/>
+                  <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
+                    onChange={e=>{
+                      const next = {...fields}; next[group][idx].desc = e.target.value; setFields(next)
+                    }}/>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" disabled={!canEdit} checked={!!f.show}
+                      onChange={e=>{
+                        const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
+                      }}/>
+                    <span>Show in table</span>
+                  </label>
+                  {canEdit && (
+                    <button className="px-2 py-1 text-sm border rounded"
+                      onClick={async()=>{
+                        await api.post(`/api/inventories/${id}/fields`, { fields })
+                        await load(); toast('Saved field config')
+                      }}>Save</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab==='access' && (<AccessTab id={id} canEdit={canEdit}/>)}
+
+      {tab==='discussion' && <DiscussionTab id={id}/>}
+
+      {tab==='stats' && (
+        <div className="grid gap-3 mt-3">
+          {!stats ? <div className="p-4">Loading…</div> : (
+            <>
+              <div className="p-3 border rounded"><b>Items:</b> {stats.count}</div>
+
+              {['num1','num2','num3'].map(n=>(
+                <div key={n} className="p-3 border rounded">
+                  <div className="mb-1 font-medium">{n}</div>
+                  <div className="grid grid-cols-4 gap-2 text-sm">
+                    <div><b>min:</b> {stats[n].min ?? '-'}</div>
+                    <div><b>max:</b> {stats[n].max ?? '-'}</div>
+                    <div><b>avg:</b> {stats[n].avg ?? '-'}</div>
+                    <div><b>median:</b> {stats[n].median ?? '-'}</div>
+                  </div>
+                </div>
+              ))}
+
+              <div className="p-3 border rounded">
+                <div className="mb-1 font-medium">Most frequent text values</div>
+                {(stats.topText || []).length === 0
+                  ? <div className="text-sm text-gray-500">No text values yet</div>
+                  : <ul className="ml-6 list-disc">{stats.topText.map((r,i)=><li key={i}>{r.v} — {r.c}</li>)}</ul>}
+              </div>
+
+              <div className="p-3 border rounded">
+                <div className="mb-1 font-medium">Created timeline (per month)</div>
+                {(stats.timeline || []).length === 0
+                  ? <div className="text-sm text-gray-500">No items yet</div>
+                  : <ul className="ml-6 list-disc">{stats.timeline.map((r,i)=><li key={i}>{r.month}: {r.count}</li>)}</ul>}
+              </div>
+
+              <div className="p-3 border rounded">
+                <div className="mb-1 font-medium">Top contributors</div>
+                {(stats.contributors || []).length === 0
+                  ? <div className="text-sm text-gray-500">No contributions yet</div>
+                  : <ul className="ml-6 list-disc">{stats.contributors.map((r,i)=><li key={i}>{r.name || r.email} — {r.count}</li>)}</ul>}
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AccessTab({ id, canEdit }) {
+  const [users,setUsers] = useState([])
+  const [list,setList] = useState([])
+  const [q,setQ] = useState('')
+  const [sort,setSort] = useState('name')
+  const load = async () => {
+    const { data } = await api.get(`/api/inventories/${id}/access`)
+    setList(data)
+  }
+  useEffect(()=>{ load() },[id])
+  const findUsers = async (text) => {
+    const { data } = await api.get('/api/users/search', { params: { q: text } })
+    setUsers(data)
+  }
+  useEffect(()=>{ if(q) findUsers(q) },[q])
+  return (
+    <div className="grid gap-3 mt-3">
+      {canEdit && (
+        <>
+          <div className="flex gap-2">
+            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type email or name"
+              className="flex-1 px-2 py-1 border rounded"/>
+          </div>
+          {q && (
+            <div className="p-2 border rounded">
+              {users.map(u=>(
+                <div key={u.id} className="flex items-center justify-between py-1">
+                  <div>{u.name} &lt;{u.email}&gt;</div>
+                  <button className="px-2 py-1 text-sm border rounded"
+                    onClick={async()=>{
+                      await api.post(`/api/inventories/${id}/access`,{ userId: u.id, canWrite:true })
+                      setQ(''); await load()
+                    }}>Add</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+      <div className="flex items-center gap-2">
+        <span className="text-sm">Sort:</span>
+        <select className="px-2 py-1 border rounded" value={sort} onChange={e=>setSort(e.target.value)}>
+          <option value="name">name</option>
+          <option value="email">email</option>
+        </select>
+      </div>
+      <div className="border rounded">
+        {[...list].sort((a,b)=>String(a[sort]).localeCompare(String(b[sort]))).map(x=>(
+          <div key={x.userId} className="flex items-center justify-between px-3 py-2 border-b">
+            <div>{x.name} &lt;{x.email}&gt;</div>
+            <div className="flex gap-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" disabled={!canEdit} checked={x.canWrite} onChange={async(e)=>{
+                  await api.put(`/api/inventories/${id}/access/${x.userId}`, { canWrite: e.target.checked })
+                  await load()
+                }}/> write
+              </label>
+              {canEdit && (
+                <button className="px-2 py-1 text-sm border rounded"
+                  onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
+                  Remove
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+        {list.length===0 && <div className="p-4 text-center text-gray-500">No users</div>}
+      </div>
+    </div>
+  )
+}
+
+function DiscussionTab({ id }) {
+  const [list,setList] = useState([])
+  const [txt,setTxt] = useState('')
+  const load = async () => {
+    const { data } = await api.get(`/api/inventories/${id}/comments`)
+    setList(data)
+  }
+  useEffect(()=>{ load() },[id])
+  const post = async () => {
+    if (!txt.trim()) return
+    await api.post(`/api/inventories/${id}/comments`, { body: txt })
+    setTxt(''); await load()
+  }
+  return (
+    <div className="grid gap-3 mt-3">
+      <div className="p-2 border rounded">
+        {list.map(c=>(
+          <div key={c.id} className="py-2 border-b">
+            <div className="text-sm text-gray-500">{c.userName}</div>
+            <div>{c.body}</div>
+          </div>
+        ))}
+        {list.length===0 && <div className="p-4 text-center text-gray-500">No comments</div>}
+      </div>
+      <div className="flex gap-2">
+        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded"/>
+        <button onClick={post} className="px-3 py-1 text-sm border rounded">Post</button>
+      </div>
+    </div>
+  )
+}
