@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import MarkdownBox from '../components/MarkdownBox'
@@ -22,15 +22,11 @@ const defaultElements = [
   { order:3, type:'SEQ', param:'001' }
 ]
 
-// Simple deep compare
-const stableJson = (x)=>JSON.stringify(x)
-
 export default function InventoryPage() {
   const { id } = useParams()
   const nav = useNavigate()
   const { t } = useTranslation()
   const { user } = useAuth()
-
   const [inv, setInv] = useState(null)
   const [canEdit, setCanEdit] = useState(false)
   const [tab, setTab] = useState('items')
@@ -43,25 +39,16 @@ export default function InventoryPage() {
   const [flash, setFlash] = useState('')
   const [stats, setStats] = useState(null)
 
-  // Autosave refs
-  const lastSavedInv = useRef('')
-  const lastSavedFields = useRef('')
-  const lastSavedElems = useRef('')
-
-  const toast = (msg) => { setFlash(msg); setTimeout(()=>setFlash(''), 1800) }
+  const toast = (msg) => { setFlash(msg); setTimeout(()=>setFlash(''), 2000) }
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}`)
     setInv(data.inventory)
     setCanEdit(!!data.canEdit)
     setFields(data.fields)
-    setElements(data.elements.length ? data.elements : defaultElements)
+    setElements(data.elements)
     setVersion(data.inventory.version)
     setItems(data.items)
-    lastSavedInv.current = stableJson({ ...data.inventory, version: data.inventory.version })
-    lastSavedFields.current = stableJson(data.fields)
-    lastSavedElems.current = stableJson(data.elements.length ? data.elements : defaultElements)
-
     const cats = await api.get('/api/categories')
     setCategories(cats.data || [])
   }
@@ -73,47 +60,15 @@ export default function InventoryPage() {
   }
   useEffect(()=>{ if (tab==='stats') loadStats() },[tab])
 
-  // AUTOSAVE every ~8s if dirty (General, Fields, Custom ID)
-  useEffect(() => {
-    if (!canEdit) return
-    const t = setInterval(async () => {
-      try {
-        const genDirty = inv && stableJson({ ...inv, version }) !== lastSavedInv.current
-        if (genDirty) {
-          const { data } = await api.put(`/api/inventories/${id}`, { ...inv, version, categoryId: inv.categoryId })
-          setVersion(data.version); setInv(data)
-          lastSavedInv.current = stableJson({ ...data, version: data.version })
-          toast(t('saved'))
-        }
-
-        const fDirty = stableJson(fields) !== lastSavedFields.current
-        if (fDirty) {
-          await api.post(`/api/inventories/${id}/fields`, { fields })
-          lastSavedFields.current = stableJson(fields)
-          toast(t('saved'))
-        }
-
-        const eDirty = stableJson(elements) !== lastSavedElems.current
-        if (eDirty) {
-          await api.post(`/api/inventories/${id}/custom-id`, { elements })
-          lastSavedElems.current = stableJson(elements)
-          toast(t('saved'))
-        }
-      } catch {/* ignore transient errors */}
-    }, 8000 + Math.floor(Math.random()*1200))
-    return () => clearInterval(t)
-  }, [canEdit, inv, version, fields, elements, id, t])
-
   const idPreview = useMemo(()=>renderIdPreview(elements),[elements])
 
   if (!inv) return <div className="p-6">Loading…</div>
 
   const itemCols = [
     { key: 'customId', title: 'ID', render:(v,r)=><Link to={user ? `/inventories/${id}/item/${r.id}` : '#'} className="text-blue-600">{v}</Link> },
-    ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title:f.title || `Text ${idx+1}`} ] : []).flat()),
-    ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title:f.title || `Number ${idx+1}`} ] : []).flat()),
-    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title || `Bool ${idx+1}`, render:(val)=> val ? '✓' : ''}] : []).flat()),
-    { key: 'likesCount', title: 'Likes' }
+    ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title:f.title}] : []).flat()),
+    ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title:f.title}] : []).flat()),
+    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title, render:(val)=> val ? '✓' : ''}] : []).flat())
   ]
 
   const saveSettings = async () => {
@@ -121,8 +76,7 @@ export default function InventoryPage() {
       const { data } = await api.put(`/api/inventories/${id}`, { ...inv, version, categoryId: inv.categoryId })
       setVersion(data.version)
       setInv(data)
-      lastSavedInv.current = stableJson({ ...data, version: data.version })
-      toast('Saved')
+      toast('Saved settings')
     } catch (e) {
       if (e?.response?.status === 409) toast('Version conflict — reload and try again')
       else toast('Save failed')
@@ -143,20 +97,6 @@ export default function InventoryPage() {
     toast('Deleted selected items')
   }
 
-  // Drag helpers for field groups
-  const startDrag = (group, idx) => (e) => e.dataTransfer.setData('text/plain', JSON.stringify({ group, idx }))
-  const overDrag = (e) => { e.preventDefault() }
-  const dropDrag = (group, idx) => (e) => {
-    e.preventDefault()
-    const data = JSON.parse(e.dataTransfer.getData('text/plain') || '{}')
-    if (data.group !== group) return
-    const arr = [...fields[group]]
-    const [moved] = arr.splice(data.idx, 1)
-    arr.splice(idx, 0, moved)
-    const next = { ...fields, [group]: arr }
-    setFields(next)
-  }
-
   return (
     <div className="max-w-6xl p-4 mx-auto">
       <div className="flex items-center gap-3">
@@ -166,7 +106,7 @@ export default function InventoryPage() {
         ) : (
           <div className="text-xl font-semibold">{inv.title}</div>
         )}
-        {flash && <span className="toast">{flash}</span>}
+        {flash && <span className="ml-2 text-sm text-green-600">{flash}</span>}
         <span className="ml-auto text-sm text-gray-500">
           Category:&nbsp;
           {canEdit ? (
@@ -180,7 +120,7 @@ export default function InventoryPage() {
           ) : (categories.find(c=>c.id===inv.categoryId)?.name || '-')}
         </span>
         {canEdit && (
-          <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Save</button>
+          <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded">Save</button>
         )}
       </div>
 
@@ -200,8 +140,8 @@ export default function InventoryPage() {
           <Toolbar
             left={<div className="text-sm text-gray-500">Inventory items</div>}
             right={<>
-              {canEdit && <button onClick={addItem} className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Add item</button>}
-              {canEdit && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Delete</button>}
+              {canEdit && <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>}
+              {canEdit && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
             </>}
           />
           <Table columns={itemCols} rows={items} onSelect={canEdit ? setSel : undefined}/>
@@ -215,32 +155,26 @@ export default function InventoryPage() {
             {canEdit ? (
               <MarkdownBox value={inv.description || ''} onChange={(v)=>setInv({...inv,description:v})}/>
             ) : (
-              <div className="p-3 prose border rounded dark:prose-invert max-w-none">{inv.description || <i>(no description)</i>}</div>
+              <div className="p-3 prose border rounded dark:prose-invert">{inv.description || <i>(no description)</i>}</div>
             )}
-          </label>
-
-          <label className="grid gap-1">
-            <span>Image URL</span>
-            <input value={inv.imageUrl || ''} disabled={!canEdit} onChange={e=>setInv({...inv,imageUrl:e.target.value})}
-                   className="px-2 py-1 border rounded" placeholder="https://…"/>
           </label>
 
           <label className="flex items-center gap-2">
             <span>Public write access</span>
-            <input type="checkbox" disabled={!canEdit} checked={!!inv.publicWrite}
+            <input type="checkbox" disabled={!canEdit} checked={inv.publicWrite}
               onChange={e=>setInv({...inv, publicWrite: e.target.checked})}/>
           </label>
 
           {canEdit && (
             <div className="flex gap-2 pt-2">
-              <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Save now</button>
+              <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded">Save</button>
               <button
                 onClick={async()=>{
                   if (!confirm('Delete this inventory? This cannot be undone.')) return
                   await api.delete(`/api/inventories/${id}`)
                   nav('/profile')
                 }}
-                className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded hover:bg-red-50 dark:hover:bg-red-900/30"
+                className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded"
               >Delete inventory</button>
             </div>
           )}
@@ -253,7 +187,6 @@ export default function InventoryPage() {
           <div className="text-sm text-gray-500">ID Elements</div>
           {elements.sort((a,b)=>a.order-b.order).map((el,idx)=>(
             <div key={idx} className="grid items-center gap-2 md:grid-cols-4">
-              <span className="drag-handle" draggable onDragStart={startDrag('elems', idx)} />
               <select disabled={!canEdit} value={el.type} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,type:e.target.value}; setElements(next)
               }} className="px-2 py-1 border rounded">
@@ -275,14 +208,18 @@ export default function InventoryPage() {
               {canEdit && (
                 <button onClick={()=>{
                   const next=[...elements]; next.splice(idx,1); setElements(next)
-                }} className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Remove</button>
+                }} className="px-2 py-1 text-sm border rounded">Delete</button>
               )}
             </div>
           ))}
           {canEdit && (
             <div>
               <button onClick={()=>setElements([...elements,{order:elements.length+1,type:'FIXED',param:'-'}])}
-                className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Add element</button>
+                className="px-3 py-1 text-sm border rounded">Add element</button>
+              <button onClick={async()=>{
+                await api.post(`/api/inventories/${id}/custom-id`, { elements })
+                await load(); toast('Saved ID pattern')
+              }} className="px-3 py-1 ml-2 text-sm border rounded">Save</button>
             </div>
           )}
         </div>
@@ -294,13 +231,7 @@ export default function InventoryPage() {
             <div key={group} className="p-3 border rounded">
               <div className="mb-2 font-medium uppercase">{group}</div>
               {fields[group].map((f,idx)=>(
-                <div key={idx}
-                     draggable
-                     onDragStart={startDrag(group, idx)}
-                     onDragOver={overDrag}
-                     onDrop={dropDrag(group, idx)}
-                     className="grid items-center gap-2 mb-2 md:grid-cols-5">
-                  <span className="drag-handle" title="Drag to reorder" />
+                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-4">
                   <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
                     onChange={e=>{
                       const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
@@ -317,12 +248,10 @@ export default function InventoryPage() {
                     <span>Show in table</span>
                   </label>
                   {canEdit && (
-                    <button className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900"
+                    <button className="px-2 py-1 text-sm border rounded"
                       onClick={async()=>{
                         await api.post(`/api/inventories/${id}/fields`, { fields })
-                        await load(); 
-                        lastSavedFields.current = stableJson(fields)
-                        toast('Saved field config')
+                        await load(); toast('Saved field config')
                       }}>Save</button>
                   )}
                 </div>
@@ -341,16 +270,15 @@ export default function InventoryPage() {
           {!stats ? <div className="p-4">Loading…</div> : (
             <>
               <div className="p-3 border rounded"><b>Items:</b> {stats.count}</div>
-              <div className="p-3 border rounded"><b>Likes total:</b> {stats.likesTotal}</div>
 
-              {stats.numberFields.map(n=>(
-                <div key={n.key} className="p-3 border rounded">
-                  <div className="mb-1 font-medium">{n.title}</div>
+              {['num1','num2','num3'].map(n=>(
+                <div key={n} className="p-3 border rounded">
+                  <div className="mb-1 font-medium">{n}</div>
                   <div className="grid grid-cols-4 gap-2 text-sm">
-                    <div><b>min:</b> {n.min ?? '-'}</div>
-                    <div><b>max:</b> {n.max ?? '-'}</div>
-                    <div><b>avg:</b> {n.avg ?? '-'}</div>
-                    <div><b>median:</b> {n.median ?? '-'}</div>
+                    <div><b>min:</b> {stats[n].min ?? '-'}</div>
+                    <div><b>max:</b> {stats[n].max ?? '-'}</div>
+                    <div><b>avg:</b> {stats[n].avg ?? '-'}</div>
+                    <div><b>median:</b> {stats[n].median ?? '-'}</div>
                   </div>
                 </div>
               ))}
@@ -411,7 +339,7 @@ function AccessTab({ id, canEdit }) {
               {users.map(u=>(
                 <div key={u.id} className="flex items-center justify-between py-1">
                   <div>{u.name} &lt;{u.email}&gt;</div>
-                  <button className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900"
+                  <button className="px-2 py-1 text-sm border rounded"
                     onClick={async()=>{
                       await api.post(`/api/inventories/${id}/access`,{ userId: u.id, canWrite:true })
                       setQ(''); await load()
@@ -441,7 +369,7 @@ function AccessTab({ id, canEdit }) {
                 }}/> write
               </label>
               {canEdit && (
-                <button className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900"
+                <button className="px-2 py-1 text-sm border rounded"
                   onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
                   Remove
                 </button>
@@ -458,13 +386,11 @@ function AccessTab({ id, canEdit }) {
 function DiscussionTab({ id }) {
   const [list,setList] = useState([])
   const [txt,setTxt] = useState('')
-
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/comments`)
     setList(data)
   }
-  useEffect(()=>{ load(); const t=setInterval(load, 4000); return ()=>clearInterval(t) },[id])
-
+  useEffect(()=>{ load() },[id])
   const post = async () => {
     if (!txt.trim()) return
     await api.post(`/api/inventories/${id}/comments`, { body: txt })
@@ -482,8 +408,8 @@ function DiscussionTab({ id }) {
         {list.length===0 && <div className="p-4 text-center text-gray-500">No comments</div>}
       </div>
       <div className="flex gap-2">
-        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded" placeholder="Write a comment…"/>
-        <button onClick={post} className="px-3 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Post</button>
+        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded"/>
+        <button onClick={post} className="px-3 py-1 text-sm border rounded">Post</button>
       </div>
     </div>
   )

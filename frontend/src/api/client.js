@@ -1,52 +1,35 @@
 import axios from 'axios'
 
-/**
- * Resolve API base URL from env or sensible defaults.
- * In Vercel, set VITE_API_URL to your Railway URL, e.g.:
- *   https://inventoryapp-app.up.railway.app
- */
-const BASE =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined'
-    ? (window.__API_BASE__ || '')
-    : '') ||
-  'http://localhost:3000'
+const RAW = import.meta.env.VITE_API_BASE || ''
+const BASE = RAW.replace(/\/+$/,'').replace(/\/api$/i, '')
 
-console.log('[api] baseURL =', BASE)
-
-export const apiUrl = (path) => {
-  if (!path.startsWith('/')) path = '/' + path
-  if (!path.startsWith('/api')) path = '/api' + path
-  return `${BASE}${path}`
+export const apiUrl = (path = '') => {
+  const p = path.startsWith('/') ? path : `/${path}`
+  return `/api${p}`
 }
 
 const api = axios.create({
-  baseURL: BASE + '/api',
-  withCredentials: true, // send cookies
-  headers: { 'Content-Type': 'application/json' }
+  baseURL: BASE,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Optional bearer token switch (not required when using cookies)
-let bearer = null
+function applyAuthHeader() {
+  const t = localStorage.getItem('auth_token')
+  if (t) api.defaults.headers.common['Authorization'] = `Bearer ${t}`
+  else delete api.defaults.headers.common['Authorization']
+}
+applyAuthHeader()
+
+// allow other modules to refresh header after we set/clear token
 export function setAuthToken(token) {
-  bearer = token || null
-  if (bearer) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${bearer}`
-  } else {
-    delete api.defaults.headers.common['Authorization']
-  }
+  if (token) localStorage.setItem('auth_token', token)
+  else localStorage.removeItem('auth_token')
+  applyAuthHeader()
 }
 
-// Response interceptor (optional logging)
-api.interceptors.response.use(
-  r => r,
-  err => {
-    // Re-throw a simple error object to avoid noisy axios blobs
-    const e = new Error(err?.response?.data?.message || err?.message || 'Request failed')
-    e.status = err?.response?.status
-    e.data = err?.response?.data
-    throw e
-  }
-)
+if (typeof window !== 'undefined') {
+  console.log('[api] baseURL =', api.defaults.baseURL)
+}
 
 export default api
