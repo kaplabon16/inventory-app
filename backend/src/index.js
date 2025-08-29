@@ -15,18 +15,20 @@ import inventoryRoutes from './routes/inventoryRoutes.js'
 import userRoutes from './routes/userRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
-import categoriesRoutes from './routes/categoriesRoutes.js' // NEW
+import categoriesRoutes from './routes/categoriesRoutes.js'
 
 const prisma = new PrismaClient()
 const app = express()
 
+app.set('trust proxy', 1)
+
 app.use(helmet())
 app.use(cors(corsCfg))
+app.options('*', cors(corsCfg)) // explicit preflight
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
 
-// attach user when possible so public GETs can react to ?mine etc
 app.use(optionalAuth)
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
@@ -36,7 +38,7 @@ app.use('/api/inventories', inventoryRoutes)
 app.use('/api/users', userRoutes)
 app.use('/api/search', searchRoutes)
 app.use('/api/admin', adminRoutes)
-app.use('/api/categories', categoriesRoutes) // NEW
+app.use('/api/categories', categoriesRoutes)
 
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
 app.use((err, _req, res, _next) => {
@@ -45,48 +47,24 @@ app.use((err, _req, res, _next) => {
 })
 
 async function ensureDefaultAdmin() {
-  const adminEmail = 'kaushikplabon@gmail.com'
-  const plain = '123456'
+  const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com'
+  const plain = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme'
   const existing = await prisma.user.findUnique({ where: { email: adminEmail } })
   const hash = await bcrypt.hash(plain, 10)
-
   if (!existing) {
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        name: 'Kaushik Plabon',
-        password: hash,
-        roles: ['ADMIN'],
-        blocked: false,
-      }
-    })
-    console.log(`[bootstrap] Created default admin ${adminEmail}`)
+    await prisma.user.create({ data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false } })
   } else if (!existing.roles?.includes('ADMIN')) {
-    await prisma.user.update({
-      where: { id: existing.id },
-      data: { roles: { set: ['ADMIN'] }, password: existing.password || hash }
-    })
-    console.log(`[bootstrap] Promoted ${adminEmail} to ADMIN`)
+    await prisma.user.update({ where: { id: existing.id }, data: { roles: { set: ['ADMIN'] }, password: existing.password || hash } })
   }
 }
-
 async function seedCategories() {
-  const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
-  for (const name of names) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name }
-    })
-  }
-  console.log('[seed] Categories ensured')
+  const names = ['Equipment','Supplies','Vehicles','Furniture','Other']
+  for (const name of names) await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
 }
 
 const PORT = process.env.PORT || 5045
 ;(async () => {
   await ensureDefaultAdmin()
   await seedCategories()
-  app.listen(PORT, () => {
-    console.log(`API listening on :${PORT}`)
-  })
+  app.listen(PORT, () => console.log(`API listening on :${PORT}`))
 })()

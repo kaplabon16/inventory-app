@@ -6,10 +6,11 @@ export default function ItemPage() {
   const { id, itemId } = useParams()
   const [item,setItem] = useState(null)
   const [fields,setFields] = useState(null)
+  const [likes,setLikes] = useState(0)
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
-    setItem(data.item); setFields(data.fields)
+    setItem(data.item); setFields(data.fields); setLikes(data.item?._count?.likes ?? 0)
   }
   useEffect(()=>{ load() },[id,itemId])
 
@@ -18,15 +19,22 @@ export default function ItemPage() {
     await load()
   }
 
+  const toggleLike = async () => {
+    const { data } = await api.post(`/api/inventories/${id}/items/${itemId}/like`)
+    setLikes(data.count)
+  }
+
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
-  // Render helper: skip untitled fields to avoid "boolean 1/2/3"-style labels
   const titled = (arr) => arr.map((f,idx)=>({ ...f, _i: idx })).filter(f => (f.title||'').trim() !== '')
 
   return (
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
-      <div><b>ID:</b> <input className="w-full px-2 py-1 border rounded"
-        value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})}/></div>
+      <div className="flex items-center justify-between">
+        <div><b>ID:</b> <input className="w-full px-2 py-1 border rounded"
+          value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})}/></div>
+        <button onClick={toggleLike} className="px-2 py-1 ml-3 border rounded">👍 {likes}</button>
+      </div>
 
       {titled(fields.text).map((f)=>(
         <label key={`t${f._i}`} className="grid gap-1">
