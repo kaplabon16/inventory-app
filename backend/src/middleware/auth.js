@@ -1,33 +1,31 @@
 import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
-const prisma = new PrismaClient()
 
-export function signToken(user) {
-  const payload = { id: user.id, roles: user.roles }
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN || '7d' })
+export function signToken(payload) {
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' })
 }
 
-export async function requireAuth(req, res, next) {
+export function optionalAuth(req, _res, next) {
   try {
-    const token = req.cookies?.token || (req.headers.authorization||'').replace('Bearer ','')
-    if (!token) return res.status(401).json({ error: 'Unauthorized' })
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await prisma.user.findUnique({ where: { id: decoded.id } })
-    if (!user || user.blocked) return res.status(401).json({ error: 'Unauthorized' })
+    const token =
+      (req.headers.authorization?.startsWith('Bearer ') && req.headers.authorization.slice(7)) ||
+      req.cookies?.token
+    if (!token) return next()
+    const user = jwt.verify(token, process.env.JWT_SECRET)
+    req.user = user
+  } catch { /* ignore invalid */ }
+  next()
+}
+
+export function requireAuth(req, res, next) {
+  try {
+    const token =
+      (req.headers.authorization?.startsWith('Bearer ') && req.headers.authorization.slice(7)) ||
+      req.cookies?.token
+    if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
+    const user = jwt.verify(token, process.env.JWT_SECRET)
     req.user = user
     next()
   } catch {
-    return res.status(401).json({ error: 'Unauthorized' })
+    return res.status(401).json({ error: 'UNAUTHORIZED' })
   }
-}
-
-export async function optionalAuth(req, _res, next) {
-  try {
-    const token = req.cookies?.token || (req.headers.authorization||'').replace('Bearer ','')
-    if (!token) return next()
-    const decoded = jwt.verify(token, process.env.JWT_SECRET)
-    const user = await prisma.user.findUnique({ where: { id: decoded.id } })
-    if (user && !user.blocked) req.user = user
-  } catch { /* ignore */ }
-  next()
 }

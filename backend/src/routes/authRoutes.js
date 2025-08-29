@@ -15,26 +15,18 @@ router.use(passport.initialize())
 
 // ---------- Helpers ----------
 function normalizeCookieDomain(raw) {
-  // Return undefined to omit domain entirely (recommended for localhost/IPs).
   if (!raw) return undefined
-
-  // If a full URL was provided, extract hostname.
   try {
     const maybeUrl = raw.includes('://') ? raw : `https://${raw}`
     const u = new URL(maybeUrl)
     const host = u.hostname
-
-    // Never set cookie domain on localhost or bare IPs.
     if (
       host === 'localhost' ||
       host.endsWith('.localhost') ||
       /^\d{1,3}(\.\d{1,3}){3}$/.test(host)
     ) return undefined
-
-    // Return hostname only (no scheme/port/path)
     return host
   } catch {
-    // If it's not a valid URL, accept only bare hostnames (no ports/paths)
     if (raw.includes('/') || raw.includes(':')) return undefined
     if (raw === 'localhost') return undefined
     return raw
@@ -42,12 +34,10 @@ function normalizeCookieDomain(raw) {
 }
 
 function getCookieDomain(req) {
-  // Priority: explicit COOKIE_DOMAIN, then FRONTEND_URL/BACKEND_URL, finally Origin header
   const fromEnv =
     process.env.COOKIE_DOMAIN ||
     process.env.FRONTEND_URL ||
     process.env.BACKEND_URL
-
   const fromHeader = req.get('origin')
   return normalizeCookieDomain(fromEnv || fromHeader)
 }
@@ -56,10 +46,8 @@ function computeFrontendBase() {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
   try {
     const url = new URL(raw.includes('://') ? raw : `https://${raw}`)
-    // Use origin only
     return url.origin
   } catch {
-    // Fallback to a sensible default
     return 'http://localhost:5173'
   }
 }
@@ -79,16 +67,14 @@ function bearerOrCookie(req) {
 function setCookieToken(req, res, userPayload, maxAgeMs = 1000 * 60 * 60 * 24 * 30) {
   const token = signToken(userPayload)
   const domain = getCookieDomain(req)
-
   const opts = {
     httpOnly: true,
-    secure: true,      // SameSite=None requires secure
-    sameSite: 'none',  // cross-site cookie (frontend and backend on different hosts)
+    secure: true,
+    sameSite: 'none',
     path: '/',
     maxAge: maxAgeMs,
-    ...(domain ? { domain } : {}) // only set if valid hostname
+    ...(domain ? { domain } : {})
   }
-
   res.cookie('token', token, opts)
   return token
 }
@@ -103,7 +89,6 @@ router.get(
   '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
   async (req, res) => {
-    // req.user comes from passport strategy (already a safe payload)
     setCookieToken(req, res, req.user)
     const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
     res.redirect(`${frontendBase}${rd}`)
