@@ -1,35 +1,35 @@
 import axios from 'axios'
 
-const RAW = import.meta.env.VITE_API_BASE || ''
-const BASE = RAW.replace(/\/+$/,'').replace(/\/api$/i, '')
+const RAW_BASE =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE) ||
+  (typeof process !== 'undefined' && process.env?.VITE_API_BASE) ||
+  'https://inventoryapp-app.up.railway.app'
 
-export const apiUrl = (path = '') => {
-  const p = path.startsWith('/') ? path : `/${path}`
-  return `/api${p}`
-}
+const API_BASE = RAW_BASE.replace(/\/+$/, '')
 
 const api = axios.create({
-  baseURL: BASE,
-  withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: API_BASE,
+  withCredentials: true, // <— REQUIRED so cookies go with requests
+  timeout: 20000
 })
 
-function applyAuthHeader() {
-  const t = localStorage.getItem('auth_token')
-  if (t) api.defaults.headers.common['Authorization'] = `Bearer ${t}`
-  else delete api.defaults.headers.common['Authorization']
-}
-applyAuthHeader()
-
-// allow other modules to refresh header after we set/clear token
-export function setAuthToken(token) {
-  if (token) localStorage.setItem('auth_token', token)
-  else localStorage.removeItem('auth_token')
-  applyAuthHeader()
-}
-
-if (typeof window !== 'undefined') {
-  console.log('[api] baseURL =', api.defaults.baseURL)
-}
+api.interceptors.request.use((cfg) => {
+  if (typeof window !== 'undefined') {
+    console.debug('[api] →', cfg.method?.toUpperCase(), API_BASE + (cfg.url || ''))
+  }
+  return cfg
+})
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (typeof window !== 'undefined') {
+      console.error('[api] ✕', err?.response?.status, err?.message, err?.response?.data)
+    }
+    return Promise.reject(err)
+  }
+)
 
 export default api
+
+// Keep to preserve older helpers:
+export const apiUrl = (p) => (/^https?:\/\//i.test(p) ? p : `${API_BASE}${p}`)
