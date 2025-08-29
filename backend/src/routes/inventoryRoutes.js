@@ -1,174 +1,119 @@
-// backend/src/routes/authRoutes.js
 import { Router } from 'express'
-import passport from 'passport'
-import bcrypt from 'bcrypt'
-import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
-import { configurePassport } from '../config/passport.js'
-import { signToken } from '../middleware/auth.js'
+import { prisma } from '../services/prisma.js'
+import { requireAuthOptional } from '../middleware/auth.js'
 
-const prisma = new PrismaClient()
 const router = Router()
-configurePassport()
-router.use(passport.initialize())
 
-// ---------- helpers ----------
-const frontendBase = (() => {
-  const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
-  return raw.startsWith('http') ? raw : `https://${raw}`
-})()
+// List categories (optional helper endpoint the UI may call)
+router.get('/categories', async (_req, res) => {
+  const cats = await prisma.category.findMany({
+    orderBy: { name: 'asc' },
+    select: { id: true, name: true }
+  }).catch(() => [])
+  res.json(cats)
+})
 
-function setCookieToken(res, userPayload) {
-  const token = signToken(userPayload)
-  res.cookie('token', token, {
-    httpOnly: true,
-    sameSite: 'none',
-    secure: true,
-    maxAge: 7 * 24 * 3600 * 1000,
+/**
+ * GET /api/inventories
+ * Supports:
+ *  - ?take=10&skip=0
+ *  - ?mine=1            -> only inventories I own
+ *  - ?canWrite=1        -> inventories I can edit (owner or have write access)
+ *  - default (no flags) -> public + mine + canWrite (union)
+ * Always returns 200 with [] when empty (never 404).
+ */
+router.get('/', requireAuthOptional, async (req, res) => {
+  const userId = req.user?.id || null
+
+  // pagination
+  let take = Number(req.query.take ?? 10)
+  let skip = Number(req.query.skip ?? 0)
+  if (!Number.isFinite(take) || take <= 0 || take > 100) take = 10
+  if (!Number.isFinite(skip) || skip < 0) skip = 0
+
+  const mine = req.query.mine === '1' || req.query.mine === 'true'
+  const canWrite = req.query.canWrite === '1' || req.query.canWrite === 'true'
+
+  // where clause
+  let where
+
+  if (mine && userId) {
+    where = { ownerId: userId }
+  } else if (canWrite && userId) {
+    // owner OR explicit write access
+    where = {
+      OR: [
+        { ownerId: userId },
+        { accesses: { some: { userId, canWrite: true } } }
+      ]
+    }
+  } else {
+    // default: public plus mine/canWrite if logged in
+    where = {
+      OR: [
+        { isPublic: true },
+        ...(userId ? [{ ownerId: userId }] : []),
+        ...(userId ? [{ accesses: { some: { userId } } }] : [])
+      ]
+    }
+  }
+
+  const [rows, total] = await Promise.all([
+    prisma.inventory.findMany({
+      where,
+      take,
+      skip,
+      orderBy: { updatedAt: 'desc' },
+      include: {
+        owner: { select: { id: true, name: true, email: true } },
+        _count: { select: { items: true } },
+        category: { select: { id: true, name: true } },
+        tags: { select: { name: true } }
+      }
+    }),
+    prisma.inventory.count({ where })
+  ])
+
+  // shape to what the UI expects
+  const data = rows.map(r => ({
+    id: r.id,
+    title: r.title,
+    owner: r.owner ? (r.owner.name || r.owner.email) : '—',
+    ownerId: r.owner?.id ?? null,
+    category: r.category?.name ?? null,
+    tags: r.tags.map(t => t.name),
+    items: r._count.items,
+    updatedAt: r.updatedAt
+  }))
+
+  res.json({ data, total, take, skip })
+})
+
+// (Optional) single record fetch used by detail page
+router.get('/:id', requireAuthOptional, async (req, res) => {
+  const { id } = req.params
+  const inv = await prisma.inventory.findUnique({
+    where: { id },
+    include: {
+      owner: { select: { id: true, name: true, email: true } },
+      _count: { select: { items: true } },
+      category: { select: { id: true, name: true } },
+      fields: true,
+      tags: { select: { name: true } }
+    }
   })
-  return token
-}
+  if (!inv) return res.status(404).json({ error: 'Inventory not found' })
 
-function bearerOrCookie(req) {
-  const h = req.headers.authorization || ''
-  if (h.startsWith('Bearer ')) return h.slice(7)
-  return req.cookies?.token || null
-}
-
-// ---------- OAuth ----------
-// Tip: make sure your provider console callback matches env:
-// e.g. https://inventoryapp-app.up.railway.app/api/auth/google/callback
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
-router.get(
-  '/google/callback',
-  passport.authenticate('google', {
-    session: false,
-    failureRedirect: `${frontendBase}/login?err=google`,
-  }),
-  async (req, res) => {
-    // persist cookie then land somewhere unmistakable
-    setCookieToken(res, req.user)
-    res.redirect(`${frontendBase}/profile`)
+  // basic read-permission guard: public OR mine OR has access
+  if (
+    !inv.isPublic &&
+    req.user?.id !== inv.ownerId &&
+    !(await prisma.inventoryAccess.findFirst({ where: { inventoryId: id, userId: req.user?.id } }))
+  ) {
+    return res.status(403).json({ error: 'Forbidden' })
   }
-)
 
-router.get('/github', passport.authenticate('github', { scope: ['user:email'] }))
-router.get(
-  '/github/callback',
-  passport.authenticate('github', {
-    session: false,
-    failureRedirect: `${frontendBase}/login?err=github`,
-  }),
-  async (req, res) => {
-    setCookieToken(res, req.user)
-    res.redirect(`${frontendBase}/profile`)
-  }
-)
-
-// ---------- Email/password ----------
-router.post('/register', async (req, res) => {
-  try {
-    let { email, name, password } = req.body || {}
-    email = (email || '').trim().toLowerCase()
-    name = (name || '').trim()
-    if (!email || !name || !password || password.length < 6) {
-      return res
-        .status(400)
-        .json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
-    }
-
-    const exists = await prisma.user.findUnique({ where: { email } })
-    if (exists) {
-      return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
-    }
-
-    const hash = await bcrypt.hash(password, 10)
-    const user = await prisma.user.create({
-      data: { email, name, password: hash, roles: [], blocked: false },
-    })
-
-    const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
-    setCookieToken(res, safe)
-    res.json(safe)
-  } catch (e) {
-    console.error('REGISTER_ERR', e)
-    res.status(500).json({ error: 'SERVER_ERROR' })
-  }
-})
-
-router.post('/login', async (req, res) => {
-  try {
-    let { email, password } = req.body || {}
-    email = (email || '').trim().toLowerCase()
-    if (!email || !password) {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Email and password required.' })
-    }
-
-    const user = await prisma.user.findUnique({ where: { email } })
-    if (!user) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
-    if (user.blocked) return res.status(403).json({ error: 'BLOCKED', message: 'Your account is blocked.' })
-    if (!user.password) {
-      return res.status(400).json({
-        error: 'OAUTH_ONLY',
-        message: 'This account uses Google/GitHub. Use social login or set a password after OAuth.',
-      })
-    }
-
-    const ok = await bcrypt.compare(password, user.password)
-    if (!ok) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
-
-    const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
-    setCookieToken(res, safe)
-    res.json(safe)
-  } catch (e) {
-    console.error('LOGIN_ERR', e)
-    res.status(500).json({ error: 'SERVER_ERROR' })
-  }
-})
-
-router.post('/set-password', async (req, res) => {
-  try {
-    const token = bearerOrCookie(req)
-    if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
-    const { id } = jwt.verify(token, process.env.JWT_SECRET)
-
-    const { password } = req.body || {}
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Password must be 6+ characters.' })
-    }
-
-    const hash = await bcrypt.hash(password, 10)
-    const user = await prisma.user.update({
-      where: { id },
-      data: { password: hash },
-      select: { id: true, email: true, name: true, roles: true, blocked: true },
-    })
-    res.json({ ok: true, user })
-  } catch (e) {
-    console.error('SET_PW_ERR', e)
-    res.status(401).json({ error: 'UNAUTHORIZED' })
-  }
-})
-
-// ---------- Session helpers ----------
-router.get('/me', async (req, res) => {
-  try {
-    const raw = bearerOrCookie(req)
-    if (!raw) return res.json(null)
-    const { id } = jwt.verify(raw, process.env.JWT_SECRET)
-    const user = await prisma.user.findUnique({
-      where: { id },
-      select: { id: true, email: true, name: true, roles: true, blocked: true },
-    })
-    res.json(user || null)
-  } catch {
-    res.json(null)
-  }
-})
-
-router.post('/logout', (req, res) => {
-  res.clearCookie('token', { sameSite: 'none', secure: true })
-  res.json({ ok: true })
+  res.json(inv)
 })
 
 export default router
