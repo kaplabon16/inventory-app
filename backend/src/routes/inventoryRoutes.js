@@ -1,13 +1,16 @@
 import { Router } from 'express'
-import { prisma } from '../services/prisma.js'
+import { PrismaClient } from '@prisma/client'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
 import { generateCustomId } from '../utils/customId.js'
 
+const prisma = new PrismaClient()
 const router = Router()
+
+// attach user if present, for ?mine / ?canWrite
 router.use(optionalAuth)
 
-// list
+// ---------- LIST ----------
 router.get('/', async (req, res) => {
   const { mine, canWrite } = req.query
   const userId = req.user?.id
@@ -40,23 +43,23 @@ router.get('/', async (req, res) => {
   })))
 })
 
-// create
+// ---------- CREATE ----------
 router.post('/', requireAuth, async (req, res) => {
   const { title, description, categoryId } = req.body
   const cat = await prisma.category.findUnique({ where: { id: Number(categoryId || 0) } })
-  const fallback = await prisma.category.findFirst({ where: { name: 'Other' } })
+  const defaultCat = await prisma.category.findFirst({ where: { name: 'Other' } })
   const inv = await prisma.inventory.create({
     data: {
-      title: title || 'New Inventory',
+      title: (title || 'New Inventory').trim() || 'New Inventory',
       description: description || '',
       ownerId: req.user.id,
-      categoryId: cat?.id || fallback?.id || 1
+      categoryId: cat?.id || defaultCat?.id || 1
     }
   })
   res.json(inv)
 })
 
-// get one
+// ---------- READ ONE (PUBLIC) ----------
 router.get('/:id', async (req, res) => {
   const inv = await prisma.inventory.findUnique({
     where: { id: req.params.id },
@@ -65,14 +68,25 @@ router.get('/:id', async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
 
   const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
-  const elems  = await prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } })
-  const pack = (type) => [1,2,3].map(slot => {
+  const elems = await prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } })
+  const pack = (type) => [1, 2, 3].map(slot => {
     const x = fields.find(f => f.type === type && f.slot === slot)
     return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
   })
-  const items = await prisma.item.findMany({ where: { inventoryId: inv.id }, orderBy: { createdAt: 'desc' }, take: 100 })
+  const items = await prisma.item.findMany({
+    where: { inventoryId: inv.id },
+    orderBy: { createdAt: 'desc' }, take: 100,
+    select: {
+      id: true, customId: true, createdAt: true, updatedAt: true,
+      createdById: true,
+      text1: true, text2: true, text3: true,
+      num1: true, num2: true, num3: true,
+      bool1: true, bool2: true, bool3: true,
+    }
+  })
 
   const canEdit = !!(req.user?.id && (req.user.roles?.includes('ADMIN') || req.user.id === inv.ownerId))
+
   res.json({
     inventory: inv,
     canEdit,
@@ -82,15 +96,19 @@ router.get('/:id', async (req, res) => {
   })
 })
 
-// update inventory
+// ---------- UPDATE INVENTORY (manual save; owner/admin only) ----------
 router.put('/:id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
 
   const { version, title, description, publicWrite, categoryId } = req.body
-  const v = Number(version ?? inv.version)
-  const data = { title, description, publicWrite }
+  const v = Number.isFinite(+version) ? +version : inv.version
+  const data = {
+    title: typeof title === 'string' ? title : inv.title,
+    description: typeof description === 'string' ? description : inv.description,
+    publicWrite: !!publicWrite
+  }
 
   if (categoryId) {
     const cat = await prisma.category.findUnique({ where: { id: Number(categoryId) } })
@@ -99,14 +117,14 @@ router.put('/:id', requireAuth, async (req, res) => {
 
   const result = await prisma.inventory.updateMany({
     where: { id: inv.id, version: v },
-    data: { ...data, version: { increment: 1 }, updatedAt: new Date() }
+    data: { ...data, version: { increment: 1 } }
   })
   if (result.count === 0) return res.status(409).json({ error: 'Version conflict' })
   const updated = await prisma.inventory.findUnique({ where: { id: inv.id } })
   res.json(updated)
 })
 
-// delete inventory
+// ---------- DELETE INVENTORY (owner/admin) ----------
 router.delete('/:id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -115,7 +133,7 @@ router.delete('/:id', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-// save fields
+// ---------- SAVE FIELDS ----------
 router.post('/:id/fields', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -127,15 +145,15 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
     update: { title, description: desc, showInTable: !!show },
     create: { inventoryId: inv.id, type, slot, title, description: desc, showInTable: !!show }
   })
-  ;['text','mtext','num','link','bool'].forEach(group => {
+  ;['text', 'mtext', 'num', 'link', 'bool'].forEach(group => {
     const type = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL' }[group]
-    fields[group].forEach((cfg, idx) => tx.push(upsert(type, idx+1, cfg)))
+    fields[group].forEach((cfg, idx) => tx.push(upsert(type, idx + 1, cfg)))
   })
   await prisma.$transaction(tx)
-  res.json({ ok: true })
+  res.json({ ok: true, message: 'Saved field config' })
 })
 
-// save custom-id elements
+// ---------- CUSTOM ID ELEMENTS ----------
 router.post('/:id/custom-id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -147,28 +165,34 @@ router.post('/:id/custom-id', requireAuth, async (req, res) => {
       data: elements.map(e => ({ inventoryId: inv.id, order: e.order, type: e.type, param: e.param || null }))
     })
   }
-  res.json({ ok: true })
+  res.json({ ok: true, message: 'Saved ID pattern' })
 })
 
-// create item
+// ---------- ITEMS ----------
+async function getInvWithAccess(id) {
+  const [inv, access] = await Promise.all([
+    prisma.inventory.findUnique({ where: { id } }),
+    prisma.inventoryAccess.findMany({ where: { inventoryId: id } })
+  ])
+  return { inv, access }
+}
+
+// Create item (keeps your “create then redirect” flow)
 router.post('/:id/items', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  const { inv, access } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
-  const access = await prisma.inventoryAccess.findMany({ where: { inventoryId: inv.id } })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-  let customId = await generateCustomId(inv.id)
-  if (!customId) customId = `ID-${Math.random().toString(36).slice(2,8).toUpperCase()}` // safe fallback
-
+  const customId = await generateCustomId(inv.id)
   const item = await prisma.item.create({
     data: { inventoryId: inv.id, customId, createdById: req.user.id }
   })
   res.json(item)
 })
 
-// get item + fields
+// Read item (requires auth because editing screen shows private data)
 router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  const { inv } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
   const item = await prisma.item.findUnique({ where: { id: req.params.itemId } })
   if (!item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Item not found' })
@@ -185,11 +209,9 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   })
 })
 
-// update item
 router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  const { inv, access } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
-  const access = await prisma.inventoryAccess.findMany({ where: { inventoryId: inv.id } })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
   const data = (({ customId, ...rest }) => ({ ...rest, customId: customId || undefined }))(req.body || {})
@@ -197,82 +219,98 @@ router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   res.json(updated)
 })
 
-// delete items (single & bulk) left as-is above…
+router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
+  const { inv, access } = await getInvWithAccess(req.params.id)
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-// access routes left as-is above…
+  await prisma.item.delete({ where: { id: req.params.itemId } })
+  res.json({ ok: true })
+})
 
-// comments routes left as-is above…
+router.post('/:id/items/bulk-delete', requireAuth, async (req, res) => {
+  const { inv, access } = await getInvWithAccess(req.params.id)
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
+  const { ids = [] } = req.body || {}
+  if (!Array.isArray(ids) || !ids.length) return res.json({ ok: true, deleted: 0 })
+  const r = await prisma.item.deleteMany({ where: { id: { in: ids }, inventoryId: inv.id } })
+  res.json({ ok: true, deleted: r.count })
+})
 
-// STATS (upgraded)
+// ---------- COMMENTS ----------
+router.get('/:id/comments', async (req, res) => {
+  const list = await prisma.comment.findMany({
+    where: { inventoryId: req.params.id },
+    include: { user: true },
+    orderBy: { createdAt: 'asc' }, take: 100
+  })
+  res.json(list.map(c => ({ id: c.id, userName: c.user.name, body: c.body })))
+})
+
+router.post('/:id/comments', requireAuth, async (req, res) => {
+  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  const c = await prisma.comment.create({
+    data: { inventoryId: inv.id, userId: req.user.id, body: req.body.body || '' }
+  })
+  res.json(c)
+})
+
+// ---------- STATS ----------
 router.get('/:id/stats', async (req, res) => {
   const id = req.params.id
 
   const count = await prisma.item.count({ where: { inventoryId: id } })
-  const likesTotal = await prisma.like.count({
-    where: { item: { inventoryId: id } }
-  })
 
-  const rows = await prisma.$queryRawUnsafe(`
+  // min/max/avg/median for numeric fields
+  const [nums] = await prisma.$queryRaw`
     SELECT
-      AVG(num1) AS num1_avg, MIN(num1) AS num1_min, MAX(num1) AS num1_max,
-      AVG(num2) AS num2_avg, MIN(num2) AS num2_min, MAX(num2) AS num2_max,
-      AVG(num3) AS num3_avg, MIN(num3) AS num3_min, MAX(num3) AS num3_max
-    FROM "Item" WHERE "inventoryId" = $1
-  `, id)
+      AVG(num1) AS num1_avg, MIN(num1) AS num1_min, MAX(num1) AS num1_max, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num1) AS num1_med,
+      AVG(num2) AS num2_avg, MIN(num2) AS num2_min, MAX(num2) AS num2_max, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num2) AS num2_med,
+      AVG(num3) AS num3_avg, MIN(num3) AS num3_min, MAX(num3) AS num3_max, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num3) AS num3_med
+    FROM "Item" WHERE "inventoryId" = ${id}
+  `
 
-  const median = await prisma.$queryRawUnsafe(`
-    WITH s AS (
-      SELECT num1 FROM "Item" WHERE "inventoryId"=$1 AND num1 IS NOT NULL ORDER BY num1
-    )
-    SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num1) AS num1_med FROM s
-  `, id)
-  const median2 = await prisma.$queryRawUnsafe(`
-    WITH s AS (
-      SELECT num2 FROM "Item" WHERE "inventoryId"=$1 AND num2 IS NOT NULL ORDER BY num2
-    )
-    SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num2) AS num2_med FROM s
-  `, id)
-  const median3 = await prisma.$queryRawUnsafe(`
-    WITH s AS (
-      SELECT num3 FROM "Item" WHERE "inventoryId"=$1 AND num3 IS NOT NULL ORDER BY num3
-    )
-    SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num3) AS num3_med FROM s
-  `, id)
-
-  const topText = await prisma.$queryRawUnsafe(`
+  // top N text values across text1..text3
+  const topText = await prisma.$queryRaw`
     WITH t AS (
-      SELECT lower(trim(text1)) AS v FROM "Item" WHERE "inventoryId"=$1 AND text1 IS NOT NULL AND trim(text1) <> ''
+      SELECT lower(trim(text1)) AS v FROM "Item" WHERE "inventoryId"=${id} AND text1 IS NOT NULL AND trim(text1) <> ''
       UNION ALL
-      SELECT lower(trim(text2)) FROM "Item" WHERE "inventoryId"=$1 AND text2 IS NOT NULL AND trim(text2) <> ''
+      SELECT lower(trim(text2)) FROM "Item" WHERE "inventoryId"=${id} AND text2 IS NOT NULL AND trim(text2) <> ''
       UNION ALL
-      SELECT lower(trim(text3)) FROM "Item" WHERE "inventoryId"=$1 AND text3 IS NOT NULL AND trim(text3) <> ''
+      SELECT lower(trim(text3)) FROM "Item" WHERE "inventoryId"=${id} AND text3 IS NOT NULL AND trim(text3) <> ''
     )
-    SELECT v, COUNT(*) as c FROM t GROUP BY v ORDER BY c DESC LIMIT 10
-  `, id)
+    SELECT v, COUNT(*) as c FROM t GROUP BY v ORDER BY c DESC, v ASC LIMIT 5
+  `
 
-  const timeline = await prisma.$queryRawUnsafe(`
-    SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS ym, COUNT(*)::int AS c
-    FROM "Item" WHERE "inventoryId"=$1
-    GROUP BY 1 ORDER BY 1
-  `, id)
+  // items by month timeline
+  const timeline = await prisma.$queryRaw`
+    SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS count
+    FROM "Item" WHERE "inventoryId"=${id}
+    GROUP BY 1 ORDER BY 1 ASC
+  `
 
-  const contributors = await prisma.$queryRawUnsafe(`
-    SELECT u.name AS name, COUNT(*)::int AS c
+  // top contributors (by createdById)
+  const contributors = await prisma.$queryRaw`
+    SELECT u.name, u.email, COUNT(i.id) AS count
     FROM "Item" i
     JOIN "User" u ON u.id = i."createdById"
-    WHERE i."inventoryId"=$1
-    GROUP BY u.name
-    ORDER BY c DESC
-    LIMIT 10
-  `, id)
+    WHERE i."inventoryId"=${id}
+    GROUP BY u.name, u.email
+    ORDER BY count DESC, u.name ASC
+    LIMIT 5
+  `
 
-  const aggs = rows?.[0] || {}
   res.json({
-    count, likesTotal,
-    num1: { avg: aggs.num1_avg, min: aggs.num1_min, max: aggs.num1_max, median: median?.[0]?.num1_med ?? null },
-    num2: { avg: aggs.num2_avg, min: aggs.num2_min, max: aggs.num2_max, median: median2?.[0]?.num2_med ?? null },
-    num3: { avg: aggs.num3_avg, min: aggs.num3_min, max: aggs.num3_max, median: median3?.[0]?.num3_med ?? null },
-    topText, timeline, contributors
+    count,
+    // numeric summaries
+    num1: { min: nums?.num1_min ?? null, max: nums?.num1_max ?? null, avg: nums?.num1_avg ?? null, median: nums?.num1_med ?? null },
+    num2: { min: nums?.num2_min ?? null, max: nums?.num2_max ?? null, avg: nums?.num2_avg ?? null, median: nums?.num2_med ?? null },
+    num3: { min: nums?.num3_min ?? null, max: nums?.num3_max ?? null, avg: nums?.num3_avg ?? null, median: nums?.num3_med ?? null },
+    topText,
+    timeline,
+    contributors,
   })
 })
 
