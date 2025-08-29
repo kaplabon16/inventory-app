@@ -1,8 +1,6 @@
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../services/prisma.js'
 import dayjs from 'dayjs'
 import { randomUUID } from 'crypto'
-
-const prisma = new PrismaClient()
 
 function randHex(bits) {
   const max = 2 ** bits
@@ -28,6 +26,13 @@ export async function generateCustomId(inventoryId) {
     where: { inventoryId },
     orderBy: { order: 'asc' }
   })
+
+  // sensible default if not configured yet
+  if (elems.length === 0) {
+    const seq = await nextSequence(inventoryId, '0001')
+    return `INV-${dayjs().format('YYMM')}-${seq}`
+  }
+
   const parts = []
   for (const el of elems) {
     switch (el.type) {
@@ -42,5 +47,5 @@ export async function generateCustomId(inventoryId) {
       default: break
     }
   }
-  return parts.join('')
+  return parts.join('') || `INV-${randDigits(6)}`
 }

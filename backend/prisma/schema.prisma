@@ -23,28 +23,28 @@ model User {
   items       Item[]      @relation("ItemCreatedBy")
   comments    Comment[]   @relation("CommentUser")
   accesses    InventoryAccess[]
-  likes       Like[]      @relation("UserLikes")
+  likes       Like[]
 }
 
 model Category {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique
+  id   Int    @id @default(autoincrement())
+  name String @unique
   inventories Inventory[]
 }
 
 model Inventory {
-  id          String    @id @default(cuid())
+  id          String   @id @default(cuid())
   ownerId     String
-  owner       User      @relation("UserInventories", fields: [ownerId], references: [id])
+  owner       User     @relation("UserInventories", fields: [ownerId], references: [id])
   title       String
-  description String    @default("")
+  description String   @default("")
   categoryId  Int
-  category    Category  @relation(fields: [categoryId], references: [id])
+  category    Category @relation(fields: [categoryId], references: [id])
   imageUrl    String?
-  publicWrite Boolean   @default(false)
-  version     Int       @default(1)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  publicWrite Boolean  @default(false)
+  version     Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   fields    InventoryField[]
   idElems   CustomIdElement[]
@@ -132,7 +132,7 @@ model Item {
   bool3  Boolean?
 
   comments Comment[]
-  likes    Like[]       @relation("ItemLikes")
+  likes    Like[]
 
   @@unique([inventoryId, customId])
   @@index([inventoryId])
@@ -179,12 +179,13 @@ model InventoryAccess {
 }
 
 model Like {
-  itemId String
-  userId String
+  id      String   @id @default(cuid())
+  itemId  String
+  userId  String
   createdAt DateTime @default(now())
 
-  item Item @relation("ItemLikes", fields: [itemId], references: [id], onDelete: Cascade)
-  user User @relation("UserLikes", fields: [userId], references: [id], onDelete: Cascade)
+  item    Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@id([itemId, userId])
+  @@unique([itemId, userId])
 }
