@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import passport from 'passport'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'         // <-- bcryptjs
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
 import { configurePassport } from '../config/passport.js'
@@ -32,16 +32,11 @@ function normalizeCookieDomain(raw) {
     return raw
   }
 }
-
 function getCookieDomain(req) {
-  const fromEnv =
-    process.env.COOKIE_DOMAIN ||
-    process.env.FRONTEND_URL ||
-    process.env.BACKEND_URL
+  const fromEnv = process.env.COOKIE_DOMAIN || process.env.FRONTEND_URL || process.env.BACKEND_URL
   const fromHeader = req.get('origin')
   return normalizeCookieDomain(fromEnv || fromHeader)
 }
-
 function computeFrontendBase() {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
   try {
@@ -57,13 +52,11 @@ function normalizeRedirect(r) {
   if (!r || typeof r !== 'string') return '/profile'
   return r.startsWith('/') ? r : '/profile'
 }
-
 function bearerOrCookie(req) {
   const h = req.headers.authorization || ''
   if (h.startsWith('Bearer ')) return h.slice(7)
   return req.cookies?.token || null
 }
-
 function setCookieToken(req, res, userPayload, maxAgeMs = 1000 * 60 * 60 * 24 * 30) {
   const token = signToken(userPayload)
   const domain = getCookieDomain(req)
@@ -84,7 +77,6 @@ router.get('/google', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('google', { scope: ['profile', 'email'], state, session: false })(req, res, next)
 })
-
 router.get(
   '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
@@ -94,12 +86,10 @@ router.get(
     res.redirect(`${frontendBase}${rd}`)
   }
 )
-
 router.get('/github', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('github', { scope: ['user:email'], state, session: false })(req, res, next)
 })
-
 router.get(
   '/github/callback',
   passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
@@ -120,7 +110,6 @@ router.post('/register', async (req, res) => {
     if (!email || !name || !password || password.length < 6) {
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
     }
-
     const exists = await prisma.user.findUnique({ where: { email } })
     if (exists) return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
 
@@ -128,7 +117,6 @@ router.post('/register', async (req, res) => {
     const user = await prisma.user.create({
       data: { email, name, password: hash, roles: [], blocked: false },
     })
-
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
     setCookieToken(req, res, safe)
     res.json(safe)
