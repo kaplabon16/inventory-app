@@ -31,11 +31,11 @@ export default function Profile() {
       <div className="grid gap-6 md:grid-cols-2">
         <div>
           <Toolbar left={<div className="text-sm text-gray-500">{t('inventories')} (owner)</div>} />
-          <Table columns={cols} rows={owned}/>
+          <Table columns={cols} rows={owned} rowLink={(r)=>`/inventories/${r.id}`}/>
         </div>
         <div>
           <Toolbar left={<div className="text-sm text-gray-500">{t('inventories')} ({t('writeAccess')})</div>} />
-          <Table columns={cols} rows={write}/>
+          <Table columns={cols} rows={write} rowLink={(r)=>`/inventories/${r.id}`}/>
         </div>
       </div>
     </div>

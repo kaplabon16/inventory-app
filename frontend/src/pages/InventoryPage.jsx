@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import MarkdownBox from '../components/MarkdownBox'
 import Toolbar from '../components/Toolbar'
 import Table from '../components/Table'
-import { useUI } from '../store/ui'
 import { useTranslation } from 'react-i18next'
 import { renderIdPreview } from '../utils/idPreview'
 
@@ -25,7 +24,6 @@ const defaultElements = [
 export default function InventoryPage() {
   const { id } = useParams()
   const { t } = useTranslation()
-  const { autosaveState, setSaving } = useUI()
   const [inv, setInv] = useState(null)
   const [tab, setTab] = useState('items')
   const [fields,setFields] = useState(emptyFields)
@@ -33,6 +31,8 @@ export default function InventoryPage() {
   const [items,setItems] = useState([])
   const [sel,setSel] = useState([])
   const [version,setVersion] = useState(1)
+  const [stats,setStats] = useState(null)
+  const nav = useNavigate()
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}`)
@@ -41,34 +41,25 @@ export default function InventoryPage() {
     setElements(data.elements)
     setVersion(data.inventory.version)
     setItems(data.items)
+    const st = await api.get(`/api/inventories/${id}/stats`)
+    setStats(st.data)
   }
   useEffect(()=>{ load() },[id])
 
-  useEffect(()=>{
-    const timer = setInterval(async ()=>{
-      if (!inv) return
-      setSaving('saving')
-      try {
-        const { data } = await api.put(`/api/inventories/${id}`, { ...inv, version })
-        setVersion(data.version)
-        setSaving('saved')
-      } catch {
-        setSaving('saved')
-      }
-    }, 8000)
-    return ()=>clearInterval(timer)
-  },[inv, version])
-
   const addItem = async () => {
     const { data } = await api.post(`/api/inventories/${id}/items`, {})
-    window.location.href = `/inventories/${id}/item/${data.id}`
+    nav(`/inventories/${id}/item/${data.id}`)
   }
 
   const removeSelected = async () => {
-    const ids = Array.isArray(sel) && sel[0] && Array.isArray(sel[0]) ? sel[0] : sel
-    if (!ids.length) return
-    await api.post(`/api/inventories/${id}/items/bulk-delete`, { ids })
+    if (sel.length===0) return
+    await api.post(`/api/inventories/${id}/items/bulk-delete`, { ids: sel })
     setSel([]); await load()
+  }
+
+  const saveFields = async () => {
+    await api.post(`/api/inventories/${id}/fields`, { fields })
+    await load()
   }
 
   const idPreview = useMemo(()=>renderIdPreview(elements),[elements])
@@ -77,9 +68,9 @@ export default function InventoryPage() {
 
   const itemCols = [
     { key: 'customId', title: 'ID', render:(v,r)=><Link to={`/inventories/${id}/item/${r.id}`} className="text-blue-600">{v}</Link> },
-    ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title:f.title}] : []).flat()),
-    ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title:f.title}] : []).flat()),
-    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title, render:(val)=> val ? '✓' : ''}] : []).flat())
+    ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title: f.title || `Text ${idx+1}`}] : []).flat()),
+    ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title: f.title || `Number ${idx+1}`}] : []).flat()),
+    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title: f.title || `Bool ${idx+1}`, render:(v)=> v ? '✓' : ''}] : []).flat())
   ]
 
   return (
@@ -87,7 +78,7 @@ export default function InventoryPage() {
       <div className="flex items-center gap-3">
         <input className="px-2 py-1 text-xl font-semibold border rounded"
           value={inv.title} onChange={e=>setInv({...inv,title:e.target.value})}/>
-        <span className="text-sm text-gray-500">{autosaveState==='saving' ? t('autosaving') : t('saved')}</span>
+        <span className="text-sm text-gray-500">Saved</span>
       </div>
 
       <div className="mt-3">
@@ -104,67 +95,74 @@ export default function InventoryPage() {
       {tab==='items' && (
         <>
           <Toolbar
-            left={<div className="text-sm text-gray-500">{t('inventoryItems')}</div>}
+            left={<div className="text-sm text-gray-500">Inventory items</div>}
             right={<>
-              <button onClick={addItem} className="px-2 py-1 text-sm border rounded">{t('addItem')}</button>
-              <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">{t('delete')}</button>
+              <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>
+              <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>
             </>}
           />
-          <Table columns={itemCols} rows={items} onSelect={setSel}/>
+          <Table columns={itemCols} rows={items} onSelect={setSel} rowLink={(r)=>`/inventories/${id}/item/${r.id}`}/>
         </>
       )}
 
       {tab==='settings' && (
         <div className="grid gap-3 mt-3">
           <label className="grid gap-1">
-            <span>{t('description')}</span>
+            <span>Description</span>
             <MarkdownBox value={inv.description || ''} onChange={(v)=>setInv({...inv,description:v})}/>
           </label>
 
           <label className="flex items-center gap-2">
-            <span>{t('publicWrite')}</span>
-            <input type="checkbox" checked={inv.publicWrite}
-              onChange={e=>setInv({...inv, publicWrite: e.target.checked})}/>
+            <span>Public write access</span>
+            <input
+              type="checkbox"
+              checked={!!inv.publicWrite}
+              onChange={async (e)=>{
+                const next = {...inv, publicWrite: e.target.checked, version}
+                setInv(next)
+                const { data } = await api.put(`/api/inventories/${id}`, next)
+                setVersion(data.version)
+              }}
+            />
           </label>
         </div>
       )}
 
       {tab==='customId' && (
         <div className="grid gap-3 mt-3">
-          <div><b>{t('preview')}:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview}</code></div>
-          <div className="text-sm text-gray-500">{t('idElements')}</div>
+          <div><b>Preview:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview}</code></div>
           {elements.sort((a,b)=>a.order-b.order).map((el,idx)=>(
             <div key={idx} className="grid items-center gap-2 md:grid-cols-4">
               <select value={el.type} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,type:e.target.value}; setElements(next)
               }} className="px-2 py-1 border rounded">
-                <option value="FIXED">{t('fixed')}</option>
-                <option value="RAND20">{t('rand20')}</option>
-                <option value="RAND32">{t('rand32')}</option>
-                <option value="RAND6">{t('rand6')}</option>
-                <option value="RAND9">{t('rand9')}</option>
-                <option value="GUID">{t('guid')}</option>
-                <option value="DATE">{t('date')}</option>
-                <option value="SEQ">{t('seq')}</option>
+                <option value="FIXED">Fixed</option>
+                <option value="RAND20">20-bit random</option>
+                <option value="RAND32">32-bit random</option>
+                <option value="RAND6">6-digit random</option>
+                <option value="RAND9">9-digit random</option>
+                <option value="GUID">GUID</option>
+                <option value="DATE">Date</option>
+                <option value="SEQ">Sequence</option>
               </select>
               <input value={el.param||''} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,param:e.target.value}; setElements(next)
-              }} className="px-2 py-1 border rounded" placeholder={t('format')}/>
+              }} className="px-2 py-1 border rounded" placeholder="Format / text"/>
               <input type="number" value={el.order} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,order:parseInt(e.target.value||'1',10)}; setElements(next)
               }} className="w-24 px-2 py-1 border rounded"/>
               <button onClick={()=>{
                 const next=[...elements]; next.splice(idx,1); setElements(next)
-              }} className="px-2 py-1 text-sm border rounded">{t('delete')}</button>
+              }} className="px-2 py-1 text-sm border rounded">Delete</button>
             </div>
           ))}
           <div>
             <button onClick={()=>setElements([...elements,{order:elements.length+1,type:'FIXED',param:'-'}])}
-              className="px-3 py-1 text-sm border rounded">{t('addElement')}</button>
+              className="px-3 py-1 text-sm border rounded">Add element</button>
             <button onClick={async()=>{
               await api.post(`/api/inventories/${id}/custom-id`, { elements })
               await load()
-            }} className="px-3 py-1 ml-2 text-sm border rounded">{t('save')}</button>
+            }} className="px-3 py-1 ml-2 text-sm border rounded">Save</button>
           </div>
         </div>
       )}
@@ -189,22 +187,31 @@ export default function InventoryPage() {
                       onChange={e=>{
                         const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
                       }}/>
-                    <span>{t('showInTable')}</span>
+                    <span>Show in table</span>
                   </label>
-                  <button className="px-2 py-1 text-sm border rounded"
-                    onClick={async()=>{
-                      await api.post(`/api/inventories/${id}/fields`, { fields })
-                      await load()
-                    }}>{t('save')}</button>
+                  <div />
                 </div>
               ))}
+              <div className="text-right">
+                <button className="px-2 py-1 text-sm border rounded" onClick={saveFields}>Save</button>
+              </div>
             </div>
           ))}
         </div>
       )}
 
-      {tab==='access' && (<AccessTab id={id}/>)}
-      {tab==='stats' && <StatsTab id={id}/>}
+      {tab==='access' && <AccessTab id={id}/>}
+
+      {tab==='stats' && (
+        !stats ? <div className="p-4">Loading…</div> : (
+          <div className="grid gap-3 mt-3 md:grid-cols-3">
+            <div className="p-3 border rounded"><b>Items:</b> {stats.count}</div>
+            <div className="p-3 border rounded"><b>{stats.labels?.num1} avg:</b> {stats.num1_avg ?? '-'}</div>
+            <div className="p-3 border rounded"><b>{stats.labels?.num2} avg:</b> {stats.num2_avg ?? '-'}</div>
+          </div>
+        )
+      )}
+
       {tab==='discussion' && <DiscussionTab id={id}/>}
     </div>
   )
@@ -272,22 +279,6 @@ function AccessTab({ id }) {
         ))}
         {list.length===0 && <div className="p-4 text-center text-gray-500">No users</div>}
       </div>
-    </div>
-  )
-}
-
-function StatsTab({ id }) {
-  const [data,setData] = useState(null)
-  useEffect(()=>{ (async()=>{
-    const { data } = await api.get(`/api/inventories/${id}/stats`)
-    setData(data)
-  })() },[id])
-  if (!data) return <div className="p-4">Loading…</div>
-  return (
-    <div className="grid gap-3 mt-3 md:grid-cols-3">
-      <div className="p-3 border rounded"><b>Items:</b> {data.count}</div>
-      <div className="p-3 border rounded"><b>Num1 avg:</b> {data.num1_avg ?? '-'}</div>
-      <div className="p-3 border rounded"><b>Num2 avg:</b> {data.num2_avg ?? '-'}</div>
     </div>
   )
 }

@@ -1,59 +1,66 @@
-export default function Table({ columns, rows, onSelect, rowLink, emptyText = "No data" }) {
-  const toggle = (id, selected, setSelected) => {
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+export default function Table({ columns, rows, onSelect, rowLink, emptyText = 'No data' }) {
+  const [selected, setSelected] = useState(new Set())
+  const navigate = useNavigate()
+
+  const toggle = (id) => {
     const next = new Set(selected)
     next.has(id) ? next.delete(id) : next.add(id)
     setSelected(next)
     onSelect?.([...next])
   }
-  const allIds = rows.map(r => r.id)
+
+  const all = rows.map(r => r.id)
+  const toggleAll = () => {
+    const allSelected = selected.size === rows.length
+    const next = allSelected ? new Set() : new Set(all)
+    setSelected(next)
+    onSelect?.([...next])
+  }
+
+  const onRowClick = (r) => {
+    if (!rowLink) return
+    const href = typeof rowLink === 'function' ? rowLink(r) : rowLink
+    if (href) navigate(href)
+  }
 
   return (
     <div className="overflow-auto border rounded">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-100 dark:bg-gray-800">
           <tr>
-            {onSelect && (
-              <th className="w-10 p-2">
-                <input
-                  type="checkbox"
-                  onChange={(e) => {
-                    const checked = e.target.checked
-                    const next = new Set(checked ? allIds : [])
-                    onSelect?.([...next])
-                    // local selected state not held here anymore
-                  }}
-                />
-              </th>
-            )}
-            {columns.map(c => <th key={c.key} className="p-2 text-left">{c.title}</th>)}
+            <th className="w-10 p-2">
+              <input type="checkbox" onChange={toggleAll} checked={selected.size===rows.length && rows.length>0}/>
+            </th>
+            {columns.map(c => (
+              <th key={c.key} className="p-2 text-left">{c.title}</th>
+            ))}
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && (
-            <tr><td colSpan={(columns.length + (onSelect?1:0))} className="p-6 text-center text-gray-500">{emptyText}</td></tr>
-          )}
           {rows.map(r => (
             <tr
               key={r.id}
-              className={`border-t ${rowLink ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''}`}
-              onClick={() => { if (rowLink) window.location.assign(rowLink(r)) }}
+              className="border-t cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
+              onClick={() => onRowClick(r)}
             >
-              {onSelect && (
-                <td className="w-10 p-2" onClick={(e)=>e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    onChange={(e)=>{
-                      // consumer holds selection; emit single toggle
-                      onSelect?.([r.id, e.target.checked ? 'add' : 'remove'])
-                    }}
-                  />
-                </td>
-              )}
+              <td className="w-10 p-2" onClick={(e)=>e.stopPropagation()}>
+                <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggle(r.id)}/>
+              </td>
               {columns.map(c => (
                 <td key={c.key} className="p-2">{c.render ? c.render(r[c.key], r) : r[c.key]}</td>
               ))}
             </tr>
           ))}
+          {rows.length===0 && (
+            <tr>
+              <td colSpan={columns.length+1} className="p-6 text-center text-gray-500">
+                {emptyText}
+              </td>
+            </tr>
+          )}
         </tbody>
       </table>
     </div>

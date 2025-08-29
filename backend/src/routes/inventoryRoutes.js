@@ -1,273 +1,174 @@
+// backend/src/routes/authRoutes.js
 import { Router } from 'express'
+import passport from 'passport'
+import bcrypt from 'bcrypt'
+import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
-import { requireAuth, optionalAuth } from '../middleware/auth.js'
-import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
-import { generateCustomId } from '../utils/customId.js'
+import { configurePassport } from '../config/passport.js'
+import { signToken } from '../middleware/auth.js'
 
 const prisma = new PrismaClient()
 const router = Router()
+configurePassport()
+router.use(passport.initialize())
 
-// attach user if present, for ?mine / ?canWrite
-router.use(optionalAuth)
+// ---------- helpers ----------
+const frontendBase = (() => {
+  const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
+  return raw.startsWith('http') ? raw : `https://${raw}`
+})()
 
-// list (home page), mine, canWrite
-router.get('/', async (req, res) => {
-  const { mine, canWrite } = req.query
-  const userId = req.user?.id
-
-  if (mine) {
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
-    const list = await prisma.inventory.findMany({
-      where: { ownerId: userId },
-      include: { _count: { select: { items: true } } }
-    })
-    return res.json(list.map(x => ({ id: x.id, title: x.title, itemsCount: x._count.items })))
-  }
-
-  if (canWrite) {
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
-    const acc = await prisma.inventoryAccess.findMany({ where: { userId, canWrite: true } })
-    const invs = await prisma.inventory.findMany({
-      where: { id: { in: acc.map(a => a.inventoryId) } },
-      include: { _count: { select: { items: true } } }
-    })
-    return res.json(invs.map(x => ({ id: x.id, title: x.title, itemsCount: x._count.items })))
-  }
-
-  const list = await prisma.inventory.findMany({
-    include: { _count: { select: { items: true } }, owner: { select: { name: true } }, category: true },
-    orderBy: { updatedAt: 'desc' }
+function setCookieToken(res, userPayload) {
+  const token = signToken(userPayload)
+  res.cookie('token', token, {
+    httpOnly: true,
+    sameSite: 'none',
+    secure: true,
+    maxAge: 7 * 24 * 3600 * 1000,
   })
-  res.json(list.map(x => ({
-    id: x.id, title: x.title, categoryName: x.category.name, ownerName: x.owner.name, itemsCount: x._count.items
-  })))
-})
-
-// create
-router.post('/', requireAuth, async (req, res) => {
-  const { title, description, categoryId } = req.body
-  const inv = await prisma.inventory.create({
-    data: { title: title || 'New Inventory', description: description || '', ownerId: req.user.id, categoryId: Number(categoryId || 1) }
-  })
-  res.json(inv)
-})
-
-// get one (with fields, id elements, items for table)
-router.get('/:id', async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id }, include: { category: true } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-
-  const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
-  const elems = await prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } })
-  const pack = (type) => [1, 2, 3].map(slot => {
-    const x = fields.find(f => f.type === type && f.slot === slot)
-    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
-  })
-  const items = await prisma.item.findMany({ where: { inventoryId: inv.id }, orderBy: { createdAt: 'desc' }, take: 100 })
-  res.json({
-    inventory: inv,
-    fields: { text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'), link: pack('LINK'), bool: pack('BOOL') },
-    elements: elems,
-    items
-  })
-})
-
-// update inventory (optimistic lock via updateMany)
-router.put('/:id', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  const { version, title, description, publicWrite } = req.body
-  const v = Number(version ?? inv.version)
-  const result = await prisma.inventory.updateMany({
-    where: { id: inv.id, version: v },
-    data: { title, description, publicWrite, version: { increment: 1 } }
-  })
-  if (result.count === 0) return res.status(409).json({ error: 'Version conflict' })
-  const updated = await prisma.inventory.findUnique({ where: { id: inv.id } })
-  res.json(updated)
-})
-
-// Save fields set
-router.post('/:id/fields', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  const { fields } = req.body
-  const tx = []
-  const upsert = (type, slot, { title, desc, show }) => prisma.inventoryField.upsert({
-    where: { inventoryId_type_slot: { inventoryId: inv.id, type, slot } },
-    update: { title, description: desc, showInTable: !!show },
-    create: { inventoryId: inv.id, type, slot, title, description: desc, showInTable: !!show }
-  })
-  ;['text', 'mtext', 'num', 'link', 'bool'].forEach(group => {
-    const type = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL' }[group]
-    fields[group].forEach((cfg, idx) => tx.push(upsert(type, idx + 1, cfg)))
-  })
-  await prisma.$transaction(tx)
-  res.json({ ok: true })
-})
-
-// Save custom id elements
-router.post('/:id/custom-id', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  const { elements = [] } = req.body
-  await prisma.customIdElement.deleteMany({ where: { inventoryId: inv.id } })
-  if (elements.length) {
-    await prisma.customIdElement.createMany({
-      data: elements.map(e => ({ inventoryId: inv.id, order: e.order, type: e.type, param: e.param || null }))
-    })
-  }
-  res.json({ ok: true })
-})
-
-// ---- Items (CRUD) ----
-
-// permission helper
-async function getInvWithAccess(id) {
-  const [inv, access] = await Promise.all([
-    prisma.inventory.findUnique({ where: { id } }),
-    prisma.inventoryAccess.findMany({ where: { inventoryId: id } })
-  ])
-  return { inv, access }
+  return token
 }
 
-router.post('/:id/items', requireAuth, async (req, res) => {
-  const { inv, access } = await getInvWithAccess(req.params.id)
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
+function bearerOrCookie(req) {
+  const h = req.headers.authorization || ''
+  if (h.startsWith('Bearer ')) return h.slice(7)
+  return req.cookies?.token || null
+}
 
-  const customId = await generateCustomId(inv.id)
-  const item = await prisma.item.create({
-    data: {
-      inventoryId: inv.id,
-      customId,
-      createdById: req.user.id
+// ---------- OAuth ----------
+// Tip: make sure your provider console callback matches env:
+// e.g. https://inventoryapp-app.up.railway.app/api/auth/google/callback
+router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
+router.get(
+  '/google/callback',
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=google`,
+  }),
+  async (req, res) => {
+    // persist cookie then land somewhere unmistakable
+    setCookieToken(res, req.user)
+    res.redirect(`${frontendBase}/profile`)
+  }
+)
+
+router.get('/github', passport.authenticate('github', { scope: ['user:email'] }))
+router.get(
+  '/github/callback',
+  passport.authenticate('github', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=github`,
+  }),
+  async (req, res) => {
+    setCookieToken(res, req.user)
+    res.redirect(`${frontendBase}/profile`)
+  }
+)
+
+// ---------- Email/password ----------
+router.post('/register', async (req, res) => {
+  try {
+    let { email, name, password } = req.body || {}
+    email = (email || '').trim().toLowerCase()
+    name = (name || '').trim()
+    if (!email || !name || !password || password.length < 6) {
+      return res
+        .status(400)
+        .json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
     }
-  })
-  res.json(item)
+
+    const exists = await prisma.user.findUnique({ where: { email } })
+    if (exists) {
+      return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
+    }
+
+    const hash = await bcrypt.hash(password, 10)
+    const user = await prisma.user.create({
+      data: { email, name, password: hash, roles: [], blocked: false },
+    })
+
+    const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
+    setCookieToken(res, safe)
+    res.json(safe)
+  } catch (e) {
+    console.error('REGISTER_ERR', e)
+    res.status(500).json({ error: 'SERVER_ERROR' })
+  }
 })
 
-router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
-  const { inv } = await getInvWithAccess(req.params.id)
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  const item = await prisma.item.findUnique({ where: { id: req.params.itemId } })
-  if (!item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Item not found' })
+router.post('/login', async (req, res) => {
+  try {
+    let { email, password } = req.body || {}
+    email = (email || '').trim().toLowerCase()
+    if (!email || !password) {
+      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Email and password required.' })
+    }
 
-  // send the current field config for rendering
-  const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
-  const pack = (type) => [1, 2, 3].map(slot => {
-    const x = fields.find(f => f.type === type && f.slot === slot)
-    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
-  })
+    const user = await prisma.user.findUnique({ where: { email } })
+    if (!user) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
+    if (user.blocked) return res.status(403).json({ error: 'BLOCKED', message: 'Your account is blocked.' })
+    if (!user.password) {
+      return res.status(400).json({
+        error: 'OAUTH_ONLY',
+        message: 'This account uses Google/GitHub. Use social login or set a password after OAuth.',
+      })
+    }
 
-  res.json({
-    item,
-    fields: { text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'), link: pack('LINK'), bool: pack('BOOL') }
-  })
+    const ok = await bcrypt.compare(password, user.password)
+    if (!ok) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
+
+    const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
+    setCookieToken(res, safe)
+    res.json(safe)
+  } catch (e) {
+    console.error('LOGIN_ERR', e)
+    res.status(500).json({ error: 'SERVER_ERROR' })
+  }
 })
 
-router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
-  const { inv, access } = await getInvWithAccess(req.params.id)
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
+router.post('/set-password', async (req, res) => {
+  try {
+    const token = bearerOrCookie(req)
+    if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
+    const { id } = jwt.verify(token, process.env.JWT_SECRET)
 
-  const data = (({ customId, ...rest }) => ({ ...rest, customId: customId || undefined }))(req.body || {})
-  const updated = await prisma.item.update({ where: { id: req.params.itemId }, data })
-  res.json(updated)
+    const { password } = req.body || {}
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Password must be 6+ characters.' })
+    }
+
+    const hash = await bcrypt.hash(password, 10)
+    const user = await prisma.user.update({
+      where: { id },
+      data: { password: hash },
+      select: { id: true, email: true, name: true, roles: true, blocked: true },
+    })
+    res.json({ ok: true, user })
+  } catch (e) {
+    console.error('SET_PW_ERR', e)
+    res.status(401).json({ error: 'UNAUTHORIZED' })
+  }
 })
 
-router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
-  const { inv, access } = await getInvWithAccess(req.params.id)
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
+// ---------- Session helpers ----------
+router.get('/me', async (req, res) => {
+  try {
+    const raw = bearerOrCookie(req)
+    if (!raw) return res.json(null)
+    const { id } = jwt.verify(raw, process.env.JWT_SECRET)
+    const user = await prisma.user.findUnique({
+      where: { id },
+      select: { id: true, email: true, name: true, roles: true, blocked: true },
+    })
+    res.json(user || null)
+  } catch {
+    res.json(null)
+  }
+})
 
-  await prisma.item.delete({ where: { id: req.params.itemId } })
+router.post('/logout', (req, res) => {
+  res.clearCookie('token', { sameSite: 'none', secure: true })
   res.json({ ok: true })
-})
-
-router.post('/:id/items/bulk-delete', requireAuth, async (req, res) => {
-  const { inv, access } = await getInvWithAccess(req.params.id)
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
-  const { ids = [] } = req.body || {}
-  if (!Array.isArray(ids) || !ids.length) return res.json({ ok: true, deleted: 0 })
-  const r = await prisma.item.deleteMany({ where: { id: { in: ids }, inventoryId: inv.id } })
-  res.json({ ok: true, deleted: r.count })
-})
-
-// Access management
-router.get('/:id/access', requireAuth, async (req, res) => {
-  const list = await prisma.inventoryAccess.findMany({
-    where: { inventoryId: req.params.id },
-    include: { user: true }
-  })
-  res.json(list.map(x => ({ userId: x.userId, name: x.user.name, email: x.user.email, canWrite: x.canWrite })))
-})
-
-router.post('/:id/access', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  const { userId, canWrite } = req.body
-  await prisma.inventoryAccess.upsert({
-    where: { inventoryId_userId: { inventoryId: inv.id, userId } },
-    update: { canWrite: !!canWrite },
-    create: { inventoryId: inv.id, userId, canWrite: !!canWrite }
-  })
-  res.json({ ok: true })
-})
-
-router.put('/:id/access/:userId', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  await prisma.inventoryAccess.update({
-    where: { inventoryId_userId: { inventoryId: inv.id, userId: req.params.userId } },
-    data: { canWrite: !!req.body.canWrite }
-  })
-  res.json({ ok: true })
-})
-
-router.delete('/:id/access/:userId', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  await prisma.inventoryAccess.delete({
-    where: { inventoryId_userId: { inventoryId: inv.id, userId: req.params.userId } }
-  })
-  res.json({ ok: true })
-})
-
-// Comments
-router.get('/:id/comments', async (req, res) => {
-  const list = await prisma.comment.findMany({
-    where: { inventoryId: req.params.id },
-    include: { user: true },
-    orderBy: { createdAt: 'desc' }, take: 100
-  })
-  res.json(list.map(c => ({ id: c.id, userName: c.user.name, body: c.body })))
-})
-router.post('/:id/comments', requireAuth, async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-  const c = await prisma.comment.create({
-    data: { inventoryId: inv.id, userId: req.user.id, body: req.body.body || '' }
-  })
-  res.json(c)
-})
-
-// Stats
-router.get('/:id/stats', async (req, res) => {
-  const id = req.params.id
-  const count = await prisma.item.count({ where: { inventoryId: id } })
-  const aggs = await prisma.$queryRaw`
-    SELECT AVG(num1) as num1_avg, AVG(num2) as num2_avg
-    FROM "Item" WHERE "inventoryId" = ${id}
-  `
-  res.json({ count, ...(aggs?.[0] || {}) })
 })
 
 export default router

@@ -1,3 +1,4 @@
+// backend/src/routes/authRoutes.js
 import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
@@ -11,6 +12,7 @@ const router = Router()
 configurePassport()
 router.use(passport.initialize())
 
+// ---------- helpers ----------
 const frontendBase = (() => {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
   return raw.startsWith('http') ? raw : `https://${raw}`
@@ -33,38 +35,46 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-// ----- OAuth -----
+// ---------- OAuth ----------
+// Tip: make sure your provider console callback matches env:
+// e.g. https://inventoryapp-app.up.railway.app/api/auth/google/callback
 router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
-
 router.get(
   '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=google`,
+  }),
   async (req, res) => {
+    // persist cookie then land somewhere unmistakable
     setCookieToken(res, req.user)
-    res.redirect(`${frontendBase}/`)
+    res.redirect(`${frontendBase}/profile`)
   }
 )
 
 router.get('/github', passport.authenticate('github', { scope: ['user:email'] }))
-
 router.get(
   '/github/callback',
-  passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
+  passport.authenticate('github', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=github`,
+  }),
   async (req, res) => {
     setCookieToken(res, req.user)
-    res.redirect(`${frontendBase}/`)
+    res.redirect(`${frontendBase}/profile`)
   }
 )
 
-// ----- Email/password -----
+// ---------- Email/password ----------
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}
     email = (email || '').trim().toLowerCase()
     name = (name || '').trim()
-
     if (!email || !name || !password || password.length < 6) {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
+      return res
+        .status(400)
+        .json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
     }
 
     const exists = await prisma.user.findUnique({ where: { email } })
@@ -96,9 +106,7 @@ router.post('/login', async (req, res) => {
 
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
-
     if (user.blocked) return res.status(403).json({ error: 'BLOCKED', message: 'Your account is blocked.' })
-
     if (!user.password) {
       return res.status(400).json({
         error: 'OAUTH_ONLY',
@@ -142,7 +150,7 @@ router.post('/set-password', async (req, res) => {
   }
 })
 
-// ----- Session helpers -----
+// ---------- Session helpers ----------
 router.get('/me', async (req, res) => {
   try {
     const raw = bearerOrCookie(req)
