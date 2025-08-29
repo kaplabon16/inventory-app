@@ -5,10 +5,11 @@ import morgan from 'morgan'
 import helmet from 'helmet'
 import cors from 'cors'
 import bcrypt from 'bcrypt'
-import { prisma } from './services/prisma.js'
+import { PrismaClient } from '@prisma/client'
 import corsCfg from './config/cors.js'
 import { optionalAuth } from './middleware/auth.js'
 
+// Routes
 import authRoutes from './routes/authRoutes.js'
 import inventoryRoutes from './routes/inventoryRoutes.js'
 import userRoutes from './routes/userRoutes.js'
@@ -16,18 +17,26 @@ import searchRoutes from './routes/searchRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
 
+const prisma = new PrismaClient()
 const app = express()
-app.set('trust proxy', 1)  // critical behind Railway proxy
 
-app.use(helmet())
+// Behind Railway proxy so secure cookies work after OAuth redirects
+app.set('trust proxy', 1)
+
+// Security + basics
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }))
 app.use(cors(corsCfg))
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
+
+// Soft attach user when possible (public pages can show “mine/canWrite” if authed)
 app.use(optionalAuth)
 
+// Health
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
+// API
 app.use('/api/auth', authRoutes)
 app.use('/api/inventories', inventoryRoutes)
 app.use('/api/users', userRoutes)
@@ -35,12 +44,14 @@ app.use('/api/search', searchRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 
+// 404 + error
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
 app.use((err, _req, res, _next) => {
-  console.error(err)
+  console.error('[server error]', err)
   res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
 
+// --- Bootstrap admin + seed ----
 async function ensureDefaultAdmin() {
   const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com'
   const plain = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme'
@@ -49,7 +60,13 @@ async function ensureDefaultAdmin() {
 
   if (!existing) {
     await prisma.user.create({
-      data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false }
+      data: {
+        email: adminEmail,
+        name: 'Admin',
+        password: hash,
+        roles: ['ADMIN'],
+        blocked: false,
+      }
     })
     console.log(`[bootstrap] Created default admin ${adminEmail}`)
   } else if (!existing.roles?.includes('ADMIN')) {
@@ -64,7 +81,11 @@ async function ensureDefaultAdmin() {
 async function seedCategories() {
   const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
   for (const name of names) {
-    await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
+    await prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name }
+    })
   }
   console.log('[seed] Categories ensured')
 }
@@ -73,5 +94,7 @@ const PORT = process.env.PORT || 5045
 ;(async () => {
   await ensureDefaultAdmin()
   await seedCategories()
-  app.listen(PORT, () => console.log(`API listening on :${PORT}`))
+  app.listen(PORT, () => {
+    console.log(`API listening on :${PORT}`)
+  })
 })()
