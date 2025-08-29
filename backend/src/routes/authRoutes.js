@@ -9,7 +9,6 @@ import { signToken } from '../middleware/auth.js'
 const prisma = new PrismaClient()
 const router = Router()
 
-// Init passport (stateless)
 configurePassport()
 router.use(passport.initialize())
 
@@ -23,19 +22,15 @@ function normalizeRedirect(r) {
   return r.startsWith('/') ? r : '/profile'
 }
 
-// Set JWT cookie with flexible domain if provided
-function setCookieToken(res, userPayload) {
-  const token = signToken(userPayload)
-
+function setCookieToken(res, payload) {
+  const token = signToken(payload)
   const opts = {
     httpOnly: true,
     sameSite: 'none',
     secure: true,
     path: '/',
-    // NOTE: only set domain if explicitly configured; otherwise default host-only is safest.
     ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
   }
-
   res.cookie('token', token, opts)
   return token
 }
@@ -46,7 +41,7 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-// ---------- OAuth with redirect (state) ----------
+// ---- OAuth with robust redirect ----
 router.get('/google', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('google', { scope: ['profile','email'], state })(req, res, next)
@@ -56,12 +51,11 @@ router.get(
   '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
   async (req, res) => {
-    setCookieToken(res, req.user)
-    // `state` may come url-encoded from provider
-    const rdRaw = req.query.state
-    const rdDecoded = typeof rdRaw === 'string' ? decodeURIComponent(rdRaw) : ''
-    const rd = normalizeRedirect(rdDecoded)
-    res.redirect(`${frontendBase}${rd}`)
+    // cookie + hash token fallback for browsers blocking 3P cookies
+    const safe = { id: req.user.id, roles: req.user.roles }
+    const token = setCookieToken(res, safe)
+    const rd = normalizeRedirect(decodeURIComponent(req.query.state || '') || '/profile')
+    res.redirect(`${frontendBase}/oauth#token=${encodeURIComponent(token)}&rd=${encodeURIComponent(rd)}`)
   }
 )
 
@@ -74,40 +68,30 @@ router.get(
   '/github/callback',
   passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
   async (req, res) => {
-    setCookieToken(res, req.user)
-    const rdRaw = req.query.state
-    const rdDecoded = typeof rdRaw === 'string' ? decodeURIComponent(rdRaw) : ''
-    const rd = normalizeRedirect(rdDecoded)
-    res.redirect(`${frontendBase}${rd}`)
+    const safe = { id: req.user.id, roles: req.user.roles }
+    const token = setCookieToken(res, safe)
+    const rd = normalizeRedirect(decodeURIComponent(req.query.state || '') || '/profile')
+    res.redirect(`${frontendBase}/oauth#token=${encodeURIComponent(token)}&rd=${encodeURIComponent(rd)}`)
   }
 )
 
-// ---------- Email/password ----------
+// ---- Email/password (unchanged) ----
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}
     email = (email || '').trim().toLowerCase()
     name = (name || '').trim()
-
     if (!email || !name || !password || password.length < 6) {
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
     }
-
     const exists = await prisma.user.findUnique({ where: { email } })
-    if (exists) {
-      return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
-    }
-
+    if (exists) return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
     const hash = await bcrypt.hash(password, 10)
-    const user = await prisma.user.create({
-      data: { email, name, password: hash, roles: [], blocked: false },
-    })
-
+    const user = await prisma.user.create({ data: { email, name, password: hash, roles: [], blocked: false } })
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
     setCookieToken(res, safe)
     res.json(safe)
-  } catch (e) {
-    console.error('REGISTER_ERR', e)
+  } catch {
     res.status(500).json({ error: 'SERVER_ERROR' })
   }
 })
@@ -116,30 +100,19 @@ router.post('/login', async (req, res) => {
   try {
     let { email, password } = req.body || {}
     email = (email || '').trim().toLowerCase()
-    if (!email || !password) {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Email and password required.' })
-    }
-
+    if (!email || !password) return res.status(400).json({ error: 'INVALID_INPUT', message: 'Email and password required.' })
     const user = await prisma.user.findUnique({ where: { email } })
     if (!user) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
-
     if (user.blocked) return res.status(403).json({ error: 'BLOCKED', message: 'Your account is blocked.' })
-
     if (!user.password) {
-      return res.status(400).json({
-        error: 'OAUTH_ONLY',
-        message: 'This account uses Google/GitHub. Use social login or set a password after OAuth.',
-      })
+      return res.status(400).json({ error: 'OAUTH_ONLY', message: 'This account uses Google/GitHub. Use social login or set a password after OAuth.' })
     }
-
     const ok = await bcrypt.compare(password, user.password)
     if (!ok) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
-
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
     setCookieToken(res, safe)
     res.json(safe)
-  } catch (e) {
-    console.error('LOGIN_ERR', e)
+  } catch {
     res.status(500).json({ error: 'SERVER_ERROR' })
   }
 })
@@ -149,12 +122,8 @@ router.post('/set-password', async (req, res) => {
     const token = bearerOrCookie(req)
     if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
     const { id } = jwt.verify(token, process.env.JWT_SECRET)
-
     const { password } = req.body || {}
-    if (!password || password.length < 6) {
-      return res.status(400).json({ error: 'INVALID_INPUT', message: 'Password must be 6+ characters.' })
-    }
-
+    if (!password || password.length < 6) return res.status(400).json({ error: 'INVALID_INPUT', message: 'Password must be 6+ characters.' })
     const hash = await bcrypt.hash(password, 10)
     const user = await prisma.user.update({
       where: { id },
@@ -162,8 +131,7 @@ router.post('/set-password', async (req, res) => {
       select: { id: true, email: true, name: true, roles: true, blocked: true },
     })
     res.json({ ok: true, user })
-  } catch (e) {
-    console.error('SET_PW_ERR', e)
+  } catch {
     res.status(401).json({ error: 'UNAUTHORIZED' })
   }
 })
