@@ -8,6 +8,8 @@ import { signToken } from '../middleware/auth.js'
 
 const prisma = new PrismaClient()
 const router = Router()
+
+// Init passport (stateless)
 configurePassport()
 router.use(passport.initialize())
 
@@ -21,14 +23,20 @@ function normalizeRedirect(r) {
   return r.startsWith('/') ? r : '/profile'
 }
 
+// Set JWT cookie with flexible domain if provided
 function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
-  res.cookie('token', token, {
+
+  const opts = {
     httpOnly: true,
     sameSite: 'none',
     secure: true,
-    maxAge: 7 * 24 * 3600 * 1000,
-  })
+    path: '/',
+    // NOTE: only set domain if explicitly configured; otherwise default host-only is safest.
+    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
+  }
+
+  res.cookie('token', token, opts)
   return token
 }
 
@@ -49,7 +57,10 @@ router.get(
   passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
   async (req, res) => {
     setCookieToken(res, req.user)
-    const rd = normalizeRedirect(req.query.state)
+    // `state` may come url-encoded from provider
+    const rdRaw = req.query.state
+    const rdDecoded = typeof rdRaw === 'string' ? decodeURIComponent(rdRaw) : ''
+    const rd = normalizeRedirect(rdDecoded)
     res.redirect(`${frontendBase}${rd}`)
   }
 )
@@ -64,7 +75,9 @@ router.get(
   passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
   async (req, res) => {
     setCookieToken(res, req.user)
-    const rd = normalizeRedirect(req.query.state)
+    const rdRaw = req.query.state
+    const rdDecoded = typeof rdRaw === 'string' ? decodeURIComponent(rdRaw) : ''
+    const rd = normalizeRedirect(rdDecoded)
     res.redirect(`${frontendBase}${rd}`)
   }
 )
@@ -171,7 +184,13 @@ router.get('/me', async (req, res) => {
 })
 
 router.post('/logout', (req, res) => {
-  res.clearCookie('token', { sameSite: 'none', secure: true })
+  const opts = {
+    sameSite: 'none',
+    secure: true,
+    path: '/',
+    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
+  }
+  res.clearCookie('token', opts)
   res.json({ ok: true })
 })
 

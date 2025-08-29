@@ -1,29 +1,50 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from "react"
 
-export default function Table({ columns, rows, onSelect, rowLink, emptyText = 'No data' }) {
-  const [selected, setSelected] = useState(new Set())
-  const navigate = useNavigate()
+/**
+ * Controlled table with multi-select.
+ *
+ * Props:
+ *  - columns: [{ key, title, render? }]
+ *  - rows:    [{ id, ... }]
+ *  - selected: string[] (optional)  // controlled selection
+ *  - onSelect(ids: string[])        // called with the full selected ids list
+ *  - rowLink?: (row) => string      // click row to navigate
+ *  - emptyText?: string
+ */
+export default function Table({ columns, rows, selected, onSelect, rowLink, emptyText = "No data" }) {
+  const controlled = Array.isArray(selected)
+  const [internal, setInternal] = useState(() => new Set())
+  const sel = useMemo(() => (controlled ? new Set(selected) : internal), [controlled, selected, internal])
 
-  const toggle = (id) => {
-    const next = new Set(selected)
-    next.has(id) ? next.delete(id) : next.add(id)
-    setSelected(next)
-    onSelect?.([...next])
+  // keep internal selection in sync if parent controls it
+  useEffect(() => {
+    if (controlled) setInternal(new Set(selected))
+  }, [controlled, selected])
+
+  const setSel = (nextSet) => {
+    if (!controlled) setInternal(nextSet)
+    onSelect?.([...nextSet])
   }
 
-  const all = rows.map(r => r.id)
-  const toggleAll = () => {
-    const allSelected = selected.size === rows.length
-    const next = allSelected ? new Set() : new Set(all)
-    setSelected(next)
-    onSelect?.([...next])
+  const allIds = rows.map(r => String(r.id))
+  const allSelected = allIds.length > 0 && allIds.every(id => sel.has(String(id)))
+  const someSelected = allIds.some(id => sel.has(String(id)))
+
+  const headerRef = useRef(null)
+  useEffect(() => {
+    if (headerRef.current) headerRef.current.indeterminate = !allSelected && someSelected
+  }, [allSelected, someSelected])
+
+  const toggleAll = (checked) => {
+    const next = new Set(checked ? allIds : [])
+    setSel(next)
   }
 
-  const onRowClick = (r) => {
-    if (!rowLink) return
-    const href = typeof rowLink === 'function' ? rowLink(r) : rowLink
-    if (href) navigate(href)
+  const toggleOne = (id, checked) => {
+    const next = new Set(sel)
+    if (checked) next.add(String(id))
+    else next.delete(String(id))
+    setSel(next)
   }
 
   return (
@@ -31,36 +52,54 @@ export default function Table({ columns, rows, onSelect, rowLink, emptyText = 'N
       <table className="min-w-full text-sm">
         <thead className="bg-gray-100 dark:bg-gray-800">
           <tr>
-            <th className="w-10 p-2">
-              <input type="checkbox" onChange={toggleAll} checked={selected.size===rows.length && rows.length>0}/>
-            </th>
-            {columns.map(c => (
-              <th key={c.key} className="p-2 text-left">{c.title}</th>
-            ))}
+            {onSelect && (
+              <th className="w-10 p-2">
+                <input
+                  ref={headerRef}
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={(e) => toggleAll(e.target.checked)}
+                />
+              </th>
+            )}
+            {columns.map(c => <th key={c.key} className="p-2 text-left">{c.title}</th>)}
           </tr>
         </thead>
         <tbody>
-          {rows.map(r => (
-            <tr
-              key={r.id}
-              className="border-t cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800"
-              onClick={() => onRowClick(r)}
-            >
-              <td className="w-10 p-2" onClick={(e)=>e.stopPropagation()}>
-                <input type="checkbox" checked={selected.has(r.id)} onChange={()=>toggle(r.id)}/>
-              </td>
-              {columns.map(c => (
-                <td key={c.key} className="p-2">{c.render ? c.render(r[c.key], r) : r[c.key]}</td>
-              ))}
-            </tr>
-          ))}
-          {rows.length===0 && (
+          {rows.length === 0 && (
             <tr>
-              <td colSpan={columns.length+1} className="p-6 text-center text-gray-500">
+              <td colSpan={(columns.length + (onSelect ? 1 : 0))} className="p-6 text-center text-gray-500">
                 {emptyText}
               </td>
             </tr>
           )}
+          {rows.map(r => {
+            const id = String(r.id)
+            const checked = sel.has(id)
+            const clickable = !!rowLink
+            return (
+              <tr
+                key={id}
+                className={`border-t ${clickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''}`}
+                onClick={() => { if (clickable) window.location.assign(rowLink(r)) }}
+              >
+                {onSelect && (
+                  <td className="w-10 p-2" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => toggleOne(id, e.target.checked)}
+                    />
+                  </td>
+                )}
+                {columns.map(c => (
+                  <td key={c.key} className="p-2">
+                    {c.render ? c.render(r[c.key], r) : r[c.key]}
+                  </td>
+                ))}
+              </tr>
+            )
+          })}
         </tbody>
       </table>
     </div>
