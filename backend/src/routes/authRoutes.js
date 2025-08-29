@@ -16,6 +16,12 @@ const frontendBase = (() => {
   return raw.startsWith('http') ? raw : `https://${raw}`
 })()
 
+function normalizeRedirect(r) {
+  if (!r || typeof r !== 'string') return '/'
+  // only allow same-site paths
+  return r.startsWith('/') ? r : '/'
+}
+
 function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
   res.cookie('token', token, {
@@ -33,30 +39,38 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-// ----- OAuth -----
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }))
+/** ---------- OAuth with redirect (state) ---------- **/
+router.get('/google', (req, res, next) => {
+  const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
+  passport.authenticate('google', { scope: ['profile','email'], state })(req, res, next)
+})
 
 router.get(
   '/google/callback',
   passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
   async (req, res) => {
     setCookieToken(res, req.user)
-    res.redirect(`${frontendBase}/`)
+    const rd = normalizeRedirect(req.query.state)
+    res.redirect(`${frontendBase}${rd}`)
   }
 )
 
-router.get('/github', passport.authenticate('github', { scope: ['user:email'] }))
+router.get('/github', (req, res, next) => {
+  const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
+  passport.authenticate('github', { scope: ['user:email'], state })(req, res, next)
+})
 
 router.get(
   '/github/callback',
   passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
   async (req, res) => {
     setCookieToken(res, req.user)
-    res.redirect(`${frontendBase}/`)
+    const rd = normalizeRedirect(req.query.state)
+    res.redirect(`${frontendBase}${rd}`)
   }
 )
 
-// ----- Email/password -----
+/** ---------- Email/password ---------- **/
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}
@@ -142,7 +156,6 @@ router.post('/set-password', async (req, res) => {
   }
 })
 
-// ----- Session helpers -----
 router.get('/me', async (req, res) => {
   try {
     const raw = bearerOrCookie(req)
