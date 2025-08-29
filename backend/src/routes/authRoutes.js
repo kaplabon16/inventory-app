@@ -17,9 +17,8 @@ const frontendBase = (() => {
 })()
 
 function normalizeRedirect(r) {
-  if (!r || typeof r !== 'string') return '/'
-  // only allow same-site paths
-  return r.startsWith('/') ? r : '/'
+  if (!r || typeof r !== 'string') return '/profile'
+  return r.startsWith('/') ? r : '/profile'
 }
 
 function setCookieToken(res, userPayload) {
@@ -39,7 +38,7 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-/** ---------- OAuth with redirect (state) ---------- **/
+// ---------- OAuth with redirect (state) ----------
 router.get('/google', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('google', { scope: ['profile','email'], state })(req, res, next)
@@ -70,7 +69,7 @@ router.get(
   }
 )
 
-/** ---------- Email/password ---------- **/
+// ---------- Email/password ----------
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}

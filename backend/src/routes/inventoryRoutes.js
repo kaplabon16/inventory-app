@@ -46,15 +46,26 @@ router.get('/', async (req, res) => {
 // create
 router.post('/', requireAuth, async (req, res) => {
   const { title, description, categoryId } = req.body
+  // fall back to "Other" if provided category missing
+  const cat = await prisma.category.findUnique({ where: { id: Number(categoryId || 0) } })
+  const defaultCat = await prisma.category.findFirst({ where: { name: 'Other' } })
   const inv = await prisma.inventory.create({
-    data: { title: title || 'New Inventory', description: description || '', ownerId: req.user.id, categoryId: Number(categoryId || 1) }
+    data: {
+      title: title || 'New Inventory',
+      description: description || '',
+      ownerId: req.user.id,
+      categoryId: cat?.id || defaultCat?.id || 1
+    }
   })
   res.json(inv)
 })
 
 // get one (with fields, id elements, items for table)
 router.get('/:id', async (req, res) => {
-  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id }, include: { category: true } })
+  const inv = await prisma.inventory.findUnique({
+    where: { id: req.params.id },
+    include: { category: true, owner: { select: { id: true } } }
+  })
   if (!inv) return res.status(404).json({ error: 'Not found' })
 
   const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
@@ -64,28 +75,50 @@ router.get('/:id', async (req, res) => {
     return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
   })
   const items = await prisma.item.findMany({ where: { inventoryId: inv.id }, orderBy: { createdAt: 'desc' }, take: 100 })
+
+  const canEdit = req.user?.id && (req.user.roles?.includes('ADMIN') || req.user.id === inv.ownerId)
+
   res.json({
     inventory: inv,
+    canEdit: !!canEdit,
     fields: { text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'), link: pack('LINK'), bool: pack('BOOL') },
     elements: elems,
     items
   })
 })
 
-// update inventory (optimistic lock via updateMany)
+// update inventory (optimistic lock via updateMany). Also allow category change.
 router.put('/:id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
-  const { version, title, description, publicWrite } = req.body
+
+  const { version, title, description, publicWrite, categoryId } = req.body
   const v = Number(version ?? inv.version)
+  const data = { title, description, publicWrite }
+
+  if (categoryId) {
+    const cat = await prisma.category.findUnique({ where: { id: Number(categoryId) } })
+    if (cat) data.categoryId = cat.id
+  }
+
   const result = await prisma.inventory.updateMany({
     where: { id: inv.id, version: v },
-    data: { title, description, publicWrite, version: { increment: 1 } }
+    data: { ...data, version: { increment: 1 } }
   })
   if (result.count === 0) return res.status(409).json({ error: 'Version conflict' })
   const updated = await prisma.inventory.findUnique({ where: { id: inv.id } })
   res.json(updated)
+})
+
+// DELETE inventory (owner or admin)
+router.delete('/:id', requireAuth, async (req, res) => {
+  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
+
+  await prisma.inventory.delete({ where: { id: inv.id } })
+  res.json({ ok: true })
 })
 
 // Save fields set
@@ -125,7 +158,6 @@ router.post('/:id/custom-id', requireAuth, async (req, res) => {
 
 // ---- Items (CRUD) ----
 
-// permission helper
 async function getInvWithAccess(id) {
   const [inv, access] = await Promise.all([
     prisma.inventory.findUnique({ where: { id } }),
@@ -139,13 +171,10 @@ router.post('/:id/items', requireAuth, async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
+  // Optional: prevent completely empty item body except ID? Keep as-is but always redirect on client.
   const customId = await generateCustomId(inv.id)
   const item = await prisma.item.create({
-    data: {
-      inventoryId: inv.id,
-      customId,
-      createdById: req.user.id
-    }
+    data: { inventoryId: inv.id, customId, createdById: req.user.id }
   })
   res.json(item)
 })
@@ -156,7 +185,6 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   const item = await prisma.item.findUnique({ where: { id: req.params.itemId } })
   if (!item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Item not found' })
 
-  // send the current field config for rendering
   const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
   const pack = (type) => [1, 2, 3].map(slot => {
     const x = fields.find(f => f.type === type && f.slot === slot)
@@ -259,15 +287,31 @@ router.post('/:id/comments', requireAuth, async (req, res) => {
   res.json(c)
 })
 
-// Stats
+// Stats: count, avg/min/max for num1..3 and top text values across text1..3
 router.get('/:id/stats', async (req, res) => {
   const id = req.params.id
   const count = await prisma.item.count({ where: { inventoryId: id } })
-  const aggs = await prisma.$queryRaw`
-    SELECT AVG(num1) as num1_avg, AVG(num2) as num2_avg
+
+  const rows = await prisma.$queryRaw`
+    SELECT
+      AVG(num1) AS num1_avg, MIN(num1) AS num1_min, MAX(num1) AS num1_max,
+      AVG(num2) AS num2_avg, MIN(num2) AS num2_min, MAX(num2) AS num2_max,
+      AVG(num3) AS num3_avg, MIN(num3) AS num3_min, MAX(num3) AS num3_max
     FROM "Item" WHERE "inventoryId" = ${id}
   `
-  res.json({ count, ...(aggs?.[0] || {}) })
+  const aggs = rows?.[0] || {}
+
+  const topText = await prisma.$queryRaw`
+    WITH t AS (
+      SELECT lower(trim(text1)) AS v FROM "Item" WHERE "inventoryId"=${id} AND text1 IS NOT NULL AND trim(text1) <> ''
+      UNION ALL
+      SELECT lower(trim(text2)) FROM "Item" WHERE "inventoryId"=${id} AND text2 IS NOT NULL AND trim(text2) <> ''
+      UNION ALL
+      SELECT lower(trim(text3)) FROM "Item" WHERE "inventoryId"=${id} AND text3 IS NOT NULL AND trim(text3) <> ''
+    )
+    SELECT v, COUNT(*) as c FROM t GROUP BY v ORDER BY c DESC LIMIT 5
+  `
+  res.json({ count, ...aggs, topText })
 })
 
 export default router
