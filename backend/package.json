@@ -2,20 +2,19 @@
   "name": "inventory-backend",
   "version": "1.0.0",
   "type": "module",
-  "private": true,
   "scripts": {
-    "dev": "NODE_ENV=development nodemon src/index.js",
+    "dev": "node --watch src/index.js",
     "start": "NODE_ENV=production node src/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^5.18.0",
-    "bcrypt": "^5.1.1",
+    "bcryptjs": "^2.4.3",
     "compression": "^1.7.4",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "dayjs": "^1.11.16",
+    "dayjs": "^1.11.13",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "helmet": "^7.1.0",
@@ -25,8 +24,7 @@
     "passport-github2": "^0.1.12",
     "passport-google-oauth20": "^2.0.0"
   },
-  "devDependencies": {
-    "nodemon": "^3.1.4",
-    "prisma": "^5.18.0"
+  "engines": {
+    "node": ">=18.17.0"
   }
 }
