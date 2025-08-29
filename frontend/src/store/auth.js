@@ -1,49 +1,45 @@
 import { create } from 'zustand'
-import api from '../api/client'
+import api, { setAuthToken } from '../api/client'
 
 export const useAuth = create((set, get) => ({
   user: null,
-  loading: false,
-  error: null,
+  loading: true,
 
-  hydrate: async () => {
+  async loadMe() {
     try {
-      set({ loading: true, error: null })
       const { data } = await api.get('/api/auth/me')
       set({ user: data || null, loading: false })
-    } catch (e) {
-      set({ user: null, loading: false, error: e?.response?.data || null })
+    } catch {
+      set({ user: null, loading: false })
     }
   },
 
-  register: async ({ name, email, password }) => {
-    set({ loading: true, error: null })
-    try {
-      const { data } = await api.post('/api/auth/register', { name, email, password })
-      set({ user: data, loading: false })
-      return data
-    } catch (e) {
-      set({ loading: false, error: e?.response?.data || e })
-      throw e
+  async hydrate() {
+    // if token persisted, attach before first /me
+    const saved = localStorage.getItem('auth_token')
+    if (saved) setAuthToken(saved)
+    return get().loadMe()
+  },
+
+  loginGoogle(redirect='/profile') {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/google?redirect=${encodeURIComponent(redirect)}`
+  },
+
+  loginGithub(redirect='/profile') {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/github?redirect=${encodeURIComponent(redirect)}`
+  },
+
+  async logout() {
+    try { await api.post('/api/auth/logout') } finally {
+      setAuthToken(null)
+      set({ user: null })
+      window.location.href = '/'
     }
   },
 
-  login: async (email, password) => {
-    set({ loading: true, error: null })
-    try {
-      const { data } = await api.post('/api/auth/login', { email, password })
-      set({ user: data, loading: false })
-      return data
-    } catch (e) {
-      set({ loading: false, error: e?.response?.data || e })
-      throw e
-    }
-  },
+  setUser(u) { set({ user: u }) },
 
-  logout: async () => {
-    try { await api.post('/api/auth/logout') } catch {}
-    set({ user: null })
-  },
-
-  setUser: (u) => set({ user: u })
+  setToken(t) { setAuthToken(t) }
 }))
