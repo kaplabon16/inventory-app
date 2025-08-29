@@ -1,4 +1,3 @@
-// frontend/src/store/auth.js
 import { create } from 'zustand'
 import api from '../api/client'
 
@@ -21,6 +20,7 @@ export const useAuth = create((set, get) => ({
     const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
     window.location.href = `${base}/api/auth/google`
   },
+
   loginGithub() {
     const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
     window.location.href = `${base}/api/auth/github`
@@ -29,8 +29,9 @@ export const useAuth = create((set, get) => ({
   async logout() {
     try { await api.post('/api/auth/logout') } finally {
       set({ user: null })
-      // hard refresh so cookies/session state are clean
       window.location.href = '/'
     }
   },
+
+  setUser(u) { set({ user: u }) }
 }))

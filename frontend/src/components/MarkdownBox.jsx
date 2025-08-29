@@ -6,9 +6,8 @@ export default function MarkdownBox({ value, onChange }) {
       <textarea value={value} onChange={e=>onChange(e.target.value)} rows={10}
         className="w-full p-2 font-mono border rounded" placeholder="Markdown…"/>
       <div className="p-2 prose border rounded dark:prose-invert max-w-none">
-        <ReactMarkdown>{value || '_(no content)_'}</ReactMarkdown>
+        <ReactMarkdown>{value || '*(no content)*'}</ReactMarkdown>
       </div>
     </div>
   )
 }
-

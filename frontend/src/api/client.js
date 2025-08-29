@@ -1,7 +1,6 @@
-// frontend/src/api/client.js
 import axios from 'axios'
 
-// Base is just the origin (NO /api suffix)
+// Ensure base is just the origin (no trailing / or /api)
 const RAW = import.meta.env.VITE_API_BASE || ''
 const BASE = RAW.replace(/\/+$/,'').replace(/\/api$/i, '')
 
@@ -12,7 +11,7 @@ export const apiUrl = (path = '') => {
 
 const api = axios.create({
   baseURL: BASE,                 // e.g. https://inventoryapp-app.up.railway.app
-  withCredentials: true,
+  withCredentials: true,         // send cookies for /api/auth/me etc.
   headers: { 'Content-Type': 'application/json' },
 })
 

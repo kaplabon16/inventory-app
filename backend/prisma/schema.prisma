@@ -19,7 +19,7 @@ model User {
   createdAt  DateTime @default(now())
 
   // Password is optional: required only for local login
-  password   String?  
+  password   String?
 
   inventories Inventory[] @relation("UserInventories")
   items       Item[]      @relation("ItemCreatedBy")
