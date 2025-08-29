@@ -5,8 +5,7 @@ import morgan from 'morgan'
 import helmet from 'helmet'
 import cors from 'cors'
 import bcrypt from 'bcrypt'
-import { PrismaClient } from '@prisma/client'
-
+import { prisma } from './services/prisma.js'
 import corsCfg from './config/cors.js'
 import { optionalAuth } from './middleware/auth.js'
 
@@ -17,18 +16,14 @@ import searchRoutes from './routes/searchRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
 
-const prisma = new PrismaClient()
 const app = express()
-
-app.set('trust proxy', 1)
+app.set('trust proxy', 1)  // critical behind Railway proxy
 
 app.use(helmet())
 app.use(cors(corsCfg))
-app.options('*', cors(corsCfg)) // explicit preflight
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
-
 app.use(optionalAuth)
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
@@ -51,15 +46,27 @@ async function ensureDefaultAdmin() {
   const plain = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme'
   const existing = await prisma.user.findUnique({ where: { email: adminEmail } })
   const hash = await bcrypt.hash(plain, 10)
+
   if (!existing) {
-    await prisma.user.create({ data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false } })
+    await prisma.user.create({
+      data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false }
+    })
+    console.log(`[bootstrap] Created default admin ${adminEmail}`)
   } else if (!existing.roles?.includes('ADMIN')) {
-    await prisma.user.update({ where: { id: existing.id }, data: { roles: { set: ['ADMIN'] }, password: existing.password || hash } })
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { roles: { set: ['ADMIN'] }, password: existing.password || hash }
+    })
+    console.log(`[bootstrap] Promoted ${adminEmail} to ADMIN`)
   }
 }
+
 async function seedCategories() {
-  const names = ['Equipment','Supplies','Vehicles','Furniture','Other']
-  for (const name of names) await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
+  const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
+  for (const name of names) {
+    await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
+  }
+  console.log('[seed] Categories ensured')
 }
 
 const PORT = process.env.PORT || 5045

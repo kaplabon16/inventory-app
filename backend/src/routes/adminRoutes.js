@@ -1,8 +1,7 @@
 import { Router } from 'express'
-import { PrismaClient } from '@prisma/client'
 import jwt from 'jsonwebtoken'
+import { prisma } from '../services/prisma.js'
 
-const prisma = new PrismaClient()
 const router = Router()
 
 function getToken(req) {
@@ -27,7 +26,6 @@ async function requireAdmin(req, res, next) {
   }
 }
 
-// GET users
 router.get('/users', requireAdmin, async (req, res) => {
   const q = (req.query.q || '').toString().trim()
   const skip = Number.isFinite(+req.query.skip) ? +req.query.skip : 0
@@ -56,7 +54,6 @@ router.get('/users', requireAdmin, async (req, res) => {
   res.json({ items, total, skip, take })
 })
 
-// Block / Unblock / Roles
 router.patch('/users/:id/block', requireAdmin, async (req, res) => {
   const { id } = req.params
   try {
@@ -79,28 +76,20 @@ router.patch('/users/:id/unblock', requireAdmin, async (req, res) => {
 
 router.patch('/users/:id/make-admin', requireAdmin, async (req, res) => {
   const { id } = req.params
-  try {
-    const u = await prisma.user.findUnique({ where: { id } })
-    if (!u) return res.status(404).json({ error: 'User not found' })
-    const roles = Array.from(new Set([...(u.roles || []), 'ADMIN']))
-    const user = await prisma.user.update({ where: { id }, data: { roles } })
-    res.json({ ok: true, user: { id: user.id, roles: user.roles } })
-  } catch {
-    res.status(500).json({ error: 'Failed to update roles' })
-  }
+  const u = await prisma.user.findUnique({ where: { id } })
+  if (!u) return res.status(404).json({ error: 'User not found' })
+  const roles = Array.from(new Set([...(u.roles || []), 'ADMIN']))
+  const user = await prisma.user.update({ where: { id }, data: { roles } })
+  res.json({ ok: true, user: { id: user.id, roles: user.roles } })
 })
 
 router.patch('/users/:id/remove-admin', requireAdmin, async (req, res) => {
   const { id } = req.params
-  try {
-    const u = await prisma.user.findUnique({ where: { id } })
-    if (!u) return res.status(404).json({ error: 'User not found' })
-    const roles = (u.roles || []).filter(r => r !== 'ADMIN')
-    const user = await prisma.user.update({ where: { id }, data: { roles } })
-    res.json({ ok: true, user: { id: user.id, roles: user.roles } })
-  } catch {
-    res.status(500).json({ error: 'Failed to update roles' })
-  }
+  const u = await prisma.user.findUnique({ where: { id } })
+  if (!u) return res.status(404).json({ error: 'User not found' })
+  const roles = (u.roles || []).filter(r => r !== 'ADMIN')
+  const user = await prisma.user.update({ where: { id }, data: { roles } })
+  res.json({ ok: true, user: { id: user.id, roles: user.roles } })
 })
 
 router.delete('/users/:id', requireAdmin, async (req, res) => {

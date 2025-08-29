@@ -1,43 +1,45 @@
 import passport from 'passport'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { Strategy as GitHubStrategy } from 'passport-github2'
-import { PrismaClient } from '@prisma/client'
-const prisma = new PrismaClient()
+import { prisma } from '../services/prisma.js'
 
 export function configurePassport() {
-  const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK,
-    GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_CALLBACK } = process.env
+  const {
+    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK,
+    GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_CALLBACK
+  } = process.env
 
-  if (GOOGLE_CLIENT_ID) {
+  if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_CALLBACK) {
     passport.use(new GoogleStrategy({
       clientID: GOOGLE_CLIENT_ID,
       clientSecret: GOOGLE_CLIENT_SECRET,
       callbackURL: GOOGLE_CALLBACK
-    }, async (accessToken, refreshToken, profile, done) => {
+    }, async (_accessToken, _refreshToken, profile, done) => {
       try {
-        const email = profile.emails?.[0]?.value
+        const email = profile.emails?.[0]?.value?.toLowerCase()
         const name = profile.displayName || profile.username || email
         const avatar = profile.photos?.[0]?.value
-        let user = await prisma.user.findUnique({ where: { email } })
-        if (!user) {
+        let user = email ? await prisma.user.findUnique({ where: { email } }) : null
+        if (!user && email) {
           user = await prisma.user.create({
             data: { email, name, avatar, provider: 'google', providerId: profile.id }
           })
         }
+        if (!user) return done(null, false)
         done(null, { id: user.id, roles: user.roles, name: user.name, email: user.email })
       } catch (e) { done(e) }
     }))
   }
 
-  if (GITHUB_CLIENT_ID) {
+  if (GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && GITHUB_CALLBACK) {
     passport.use(new GitHubStrategy({
       clientID: GITHUB_CLIENT_ID,
       clientSecret: GITHUB_CLIENT_SECRET,
       callbackURL: GITHUB_CALLBACK,
       scope: ['user:email']
-    }, async (accessToken, refreshToken, profile, done) => {
+    }, async (_accessToken, _refreshToken, profile, done) => {
       try {
-        const email = profile.emails?.[0]?.value || `${profile.username}@users.noreply.github.com`
+        const email = (profile.emails?.[0]?.value || `${profile.username}@users.noreply.github.com`).toLowerCase()
         const name = profile.displayName || profile.username || email
         const avatar = profile.photos?.[0]?.value
         let user = await prisma.user.findUnique({ where: { email } })
