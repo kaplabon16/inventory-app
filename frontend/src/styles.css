@@ -4,7 +4,7 @@
 /* :root { color-scheme: light dark; } */
 
 @import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
+/* @custom-variant dark (&:where(.dark, .dark *)); */
 
 
 :root { --bg-amoled: #000000; }
