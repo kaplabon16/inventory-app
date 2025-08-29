@@ -1,12 +1,16 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: 'class',   // <-- IMPORTANT
+  darkMode: 'class',  
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        'amoled-black': '#000000',
+      },
+    },
   },
   plugins: [],
 }
