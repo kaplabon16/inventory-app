@@ -1,4 +1,3 @@
-// frontend/src/store/auth.js
 import { create } from 'zustand'
 import api from '../api/client'
 
@@ -7,7 +6,6 @@ export const useAuth = create((set, get) => ({
   loading: false,
   error: null,
 
-  // Load current user from cookie
   hydrate: async () => {
     try {
       set({ loading: true, error: null })
@@ -22,7 +20,6 @@ export const useAuth = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       const { data } = await api.post('/api/auth/register', { name, email, password })
-      // cookie is set by server; keep local state in sync
       set({ user: data, loading: false })
       return data
     } catch (e) {
@@ -35,7 +32,6 @@ export const useAuth = create((set, get) => ({
     set({ loading: true, error: null })
     try {
       const { data } = await api.post('/api/auth/login', { email, password })
-      // cookie is set by server; keep local state in sync
       set({ user: data, loading: false })
       return data
     } catch (e) {
@@ -45,9 +41,7 @@ export const useAuth = create((set, get) => ({
   },
 
   logout: async () => {
-    try {
-      await api.post('/api/auth/logout')
-    } catch { /* ignore */ }
+    try { await api.post('/api/auth/logout') } catch {}
     set({ user: null })
   },
 
