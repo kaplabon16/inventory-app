@@ -11,20 +11,21 @@ export default function Admin() {
 
   const load = async () => {
     const { data } = await api.get('/api/admin/users')
-    setRows(data?.items || data || [])
+    setRows(data.items || [])
   }
   useEffect(()=>{ load() },[])
 
   const act = (path) => async () => {
-    if (sel.length===0) return
-    await api.patch(`/api/admin/users/${sel[0]}/${path}`)
+    const ids = Array.isArray(sel) && sel[0] && Array.isArray(sel[0]) ? sel[0] : sel
+    if (!ids || ids.length===0) return
+    await api.patch(`/api/admin/users/${ids[0]}/${path}`)
     setSel([]); await load()
   }
 
   const cols = [
     { key: 'name', title: 'Name' },
     { key: 'email', title: 'Email' },
-    { key: 'roles', title: 'Roles', render:v => (v||[]).join(', ') },
+    { key: 'roles', title: 'Roles', render:v => Array.isArray(v) ? v.join(', ') : '' },
     { key: 'blocked', title: t('blocked'), render:v=> v ? 'Yes' : 'No' }
   ]
 

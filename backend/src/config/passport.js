@@ -6,7 +6,7 @@ const prisma = new PrismaClient()
 
 export function configurePassport() {
   const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK,
-          GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_CALLBACK } = process.env
+    GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_CALLBACK } = process.env
 
   if (GOOGLE_CLIENT_ID) {
     passport.use(new GoogleStrategy({
@@ -24,7 +24,7 @@ export function configurePassport() {
             data: { email, name, avatar, provider: 'google', providerId: profile.id }
           })
         }
-        return done(null, user)
+        done(null, { id: user.id, roles: user.roles, name: user.name, email: user.email })
       } catch (e) { done(e) }
     }))
   }
@@ -46,7 +46,7 @@ export function configurePassport() {
             data: { email, name, avatar, provider: 'github', providerId: profile.id }
           })
         }
-        return done(null, user)
+        done(null, { id: user.id, roles: user.roles, name: user.name, email: user.email })
       } catch (e) { done(e) }
     }))
   }

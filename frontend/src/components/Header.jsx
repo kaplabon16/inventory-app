@@ -1,27 +1,26 @@
-// frontend/src/components/Header.jsx
-import { useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "../store/auth";
-import ThemeToggle from "./ThemeToggle";
-import LangToggle from "./LangToggle";
-import { useTranslation } from "react-i18next";
+import { useState } from "react"
+import { Link, useNavigate, useLocation } from "react-router-dom"
+import { useAuth } from "../store/auth"
+import ThemeToggle from "./ThemeToggle"
+import LangToggle from "./LangToggle"
+import { useTranslation } from "react-i18next"
 
 export default function Header() {
-  const { t } = useTranslation();
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { t } = useTranslation()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+  const location = useLocation()
 
-  const url = new URLSearchParams(location.search);
-  const [term, setTerm] = useState(url.get("q") || "");
+  const url = new URLSearchParams(location.search)
+  const [term, setTerm] = useState(url.get("q") || "")
 
   const onSubmit = (e) => {
-    e.preventDefault();
-    const q = term.trim();
-    navigate(`/search?q=${encodeURIComponent(q)}`);
-  };
+    e.preventDefault()
+    const q = term.trim()
+    navigate(`/search?q=${encodeURIComponent(q)}`)
+  }
 
-  const isAdmin = !!user?.roles?.includes("ADMIN");
+  const isAdmin = !!user?.roles?.includes('ADMIN')
 
   return (
     <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
@@ -46,18 +45,23 @@ export default function Header() {
 
         <div className="flex items-center gap-2 ml-auto">
           {!user ? (
-            <button onClick={() => navigate("/login")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-              {t("login")}
-            </button>
+            <>
+              <Link to="/login" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                {t("login")}
+              </Link>
+              <Link to="/register" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                Register
+              </Link>
+            </>
           ) : (
             <>
-              <button onClick={() => navigate("/profile")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={()=>navigate("/profile")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                 {t("profile")}
               </button>
               {isAdmin && (
-                <Link to="/admin" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                  Admin
-                </Link>
+                <button onClick={()=>navigate("/admin")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                  {t("admin")}
+                </button>
               )}
               <button onClick={logout} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
                 {t("logout")}
@@ -69,5 +73,5 @@ export default function Header() {
         </div>
       </div>
     </header>
-  );
+  )
 }

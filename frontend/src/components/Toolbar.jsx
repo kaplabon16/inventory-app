@@ -6,4 +6,3 @@ export default function Toolbar({ left, right }) {
     </div>
   )
 }
-

@@ -16,12 +16,14 @@ export default function Login() {
     setErr('')
     try {
       const { data } = await api.post('/api/auth/login', { email, password })
-      setUser(data); navigate('/')
+      setUser(data)
+      navigate('/')
     } catch (e) {
       const code = e?.response?.data?.error
-      const msg = code === 'OAUTH_ONLY'
-        ? 'This email is linked to Google/GitHub. Use social login or set a password after OAuth login.'
-        : e?.response?.data?.message || 'Login failed'
+      const msg =
+        code === 'OAUTH_ONLY'
+          ? 'This email is linked to Google/GitHub. Use social login or set a password after OAuth login.'
+          : e?.response?.data?.message || 'Login failed'
       setErr(msg)
     }
   }

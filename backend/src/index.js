@@ -1,71 +1,45 @@
-// backend/src/index.js
-import 'dotenv/config';
-import express from 'express';
-import cookieParser from 'cookie-parser';
-import morgan from 'morgan';
-import cors from 'cors';
+import 'dotenv/config'
+import express from 'express'
+import cookieParser from 'cookie-parser'
+import morgan from 'morgan'
+import helmet from 'helmet'
+import cors from 'cors'
 
-import authRoutes from './routes/authRoutes.js';
+import corsCfg from './config/cors.js'
+import { optionalAuth } from './middleware/auth.js'
 
-const app = express();
+import authRoutes from './routes/authRoutes.js'
+import inventoryRoutes from './routes/inventoryRoutes.js'
+import userRoutes from './routes/userRoutes.js'
+import searchRoutes from './routes/searchRoutes.js'
+import adminRoutes from './routes/adminRoutes.js'
 
-function normalize(u) {
-  if (!u) return null;
-  return /^https?:\/\//i.test(u) ? u : `https://${u}`;
-}
-const PRIMARY = normalize(process.env.FRONTEND_URL);
-const EXTRA = (process.env.CORS_ORIGINS || '')
-  .split(',')
-  .map((s) => normalize(s.trim()))
-  .filter(Boolean);
+const app = express()
 
-const allowSet = new Set(['http://localhost:5173', PRIMARY, ...EXTRA].filter(Boolean));
+app.use(helmet())
+app.use(cors(corsCfg))
+app.use(express.json({ limit: '1mb' }))
+app.use(cookieParser())
+app.use(morgan('tiny'))
 
-const corsMiddleware = cors({
-  origin(origin, cb) {
-    if (!origin) return cb(null, true);
-    try {
-      const u = new URL(origin);
-      const ok = allowSet.has(u.origin) || /\.vercel\.app$/i.test(u.hostname);
-      return ok ? cb(null, true) : cb(new Error(`Not allowed by CORS: ${origin}`));
-    } catch {
-      return cb(new Error(`Invalid origin: ${origin}`));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-});
+// attach user when possible so public GETs can react to ?mine etc
+app.use(optionalAuth)
 
-app.use(corsMiddleware);
-app.options('*', corsMiddleware);
+app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
-app.use(express.json());
-app.use(cookieParser());
-app.use(morgan('tiny'));
+app.use('/api/auth', authRoutes)
+app.use('/api/inventories', inventoryRoutes)
+app.use('/api/users', userRoutes)
+app.use('/api/search', searchRoutes)
+app.use('/api/admin', adminRoutes)
 
-app.get('/api/health', (_req, res) => res.json({ ok: true }));
+app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
+app.use((err, _req, res, _next) => {
+  console.error(err)
+  res.status(err.status || 500).json({ error: err.message || 'Server error' })
+})
 
-app.use('/api/auth', authRoutes);
-
-async function mount(modulePath, basePath) {
-  try {
-    const mod = await import(modulePath);
-    app.use(basePath, mod.default);
-    console.log(`Mounted ${basePath}`);
-  } catch {
-    console.log(`Skip ${basePath}`);
-  }
-}
-
-await mount('./routes/inventoryRoutes.js', '/api/inventories');
-await mount('./routes/searchRoutes.js', '/api/search');
-await mount('./routes/adminRoutes.js', '/api/admin'); // <— admin API
-
-app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }));
-
-const PORT = process.env.PORT || 5045;
+const PORT = process.env.PORT || 5045
 app.listen(PORT, () => {
-  console.log(`API listening on :${PORT}`);
-  console.log('CORS allowlist:', Array.from(allowSet).join(', '), ' + *.vercel.app');
-});
+  console.log(`API listening on :${PORT}`)
+})

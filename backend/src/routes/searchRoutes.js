@@ -4,15 +4,11 @@ import { PrismaClient } from '@prisma/client'
 const prisma = new PrismaClient()
 const router = Router()
 
-// Full-text search across items + inventory title.
-// Uses Postgres websearch_to_tsquery for natural queries (e.g. "laptop 2024").
-// Falls back to LIKE via the OR clause.
 router.get('/', async (req, res) => {
   const q = (req.query.q || '').toString().trim()
   if (!q) return res.json({ items: [] })
 
   try {
-    // Parameterized raw SQL (safe) — no string concat
     const like = `%${q}%`
     const rows = await prisma.$queryRaw`
       SELECT i.id,
