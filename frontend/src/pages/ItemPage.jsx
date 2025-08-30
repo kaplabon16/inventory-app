@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
+import UploadImage from '../components/UploadImage'
 
 export default function ItemPage() {
   const { id, itemId } = useParams()
@@ -28,7 +29,7 @@ export default function ItemPage() {
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
-  const titled = (arr) => arr.map((f,idx)=>({ ...f, _i: idx })).filter(f => (f.title||'').trim() !== '')
+  const shown = (arr) => arr.map((f,idx)=>({ ...f, _i: idx })).filter(f => f.show && (f.title||'').trim() !== '')
 
   return (
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
@@ -38,39 +39,49 @@ export default function ItemPage() {
         <button onClick={toggleLike} className="px-2 py-1 ml-3 border rounded">👍 {likes}</button>
       </div>
 
-      {titled(fields.text).map((f)=>(
+      {shown(fields.text).map((f)=>(
         <label key={`t${f._i}`} className="grid gap-1">
           <span>{f.title}</span>
           <input value={item[`text${f._i+1}`]||''} onChange={e=>setItem({...item, [`text${f._i+1}`]: e.target.value})}
             className="px-2 py-1 border rounded"/>
         </label>
       ))}
-      {titled(fields.mtext).map((f)=>(
+      {shown(fields.mtext).map((f)=>(
         <label key={`m${f._i}`} className="grid gap-1">
           <span>{f.title}</span>
           <textarea rows={4} value={item[`mtext${f._i+1}`]||''} onChange={e=>setItem({...item, [`mtext${f._i+1}`]: e.target.value})}
             className="px-2 py-1 border rounded"/>
         </label>
       ))}
-      {titled(fields.num).map((f)=>(
+      {shown(fields.num).map((f)=>(
         <label key={`n${f._i}`} className="grid gap-1">
           <span>{f.title}</span>
           <input type="number" value={item[`num${f._i+1}`]??''} onChange={e=>setItem({...item, [`num${f._i+1}`]: e.target.valueAsNumber})}
             className="px-2 py-1 border rounded"/>
         </label>
       ))}
-      {titled(fields.link).map((f)=>(
+      {shown(fields.link).map((f)=>(
         <label key={`l${f._i}`} className="grid gap-1">
           <span>{f.title}</span>
           <input type="url" value={item[`link${f._i+1}`]||''} onChange={e=>setItem({...item, [`link${f._i+1}`]: e.target.value})}
             className="px-2 py-1 border rounded"/>
         </label>
       ))}
-      {titled(fields.bool).map((f)=>(
+      {shown(fields.bool).map((f)=>(
         <label key={`b${f._i}`} className="flex items-center gap-2">
           <input type="checkbox" checked={!!item[`bool${f._i+1}`]} onChange={e=>setItem({...item, [`bool${f._i+1}`]: e.target.checked})}/>
           <span>{f.title}</span>
         </label>
+      ))}
+
+      {shown(fields.image).map((f)=>(
+        <div key={`img${f._i}`} className="grid gap-1">
+          <UploadImage
+            label={f.title}
+            value={item[`img${f._i+1}`] || ''}
+            onChange={(u)=>setItem({...item, [`img${f._i+1}`]: u})}
+          />
+        </div>
       ))}
 
       <div className="flex gap-2">

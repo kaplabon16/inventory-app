@@ -14,7 +14,7 @@ export default function InventoryList() {
     setError('')
     try {
       const { data } = await api.get(apiUrl('/inventories'))
-      setRows(Array.isArray(data) ? data : (data?.data || []))
+      setRows(Array.isArray(data) ? data : (data?.data || data || []))
     } catch (e) {
       setRows([])
       setError('Failed to load inventories.')
@@ -24,7 +24,7 @@ export default function InventoryList() {
   useEffect(() => { load() }, [])
 
   const create = async () => {
-    if (!user) { nav('/login'); return }
+    if (!user) { nav('/login?redirect=/inventories'); return }
     setLoading(true)
     setError('')
     try {
@@ -44,7 +44,7 @@ export default function InventoryList() {
   return (
     <div className="max-w-6xl p-6 mx-auto">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="font-medium">Inventories</h2>
+        <h2 className="font-medium">All Inventories</h2>
         <button onClick={create} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800" disabled={loading}>
           {loading ? 'Creating…' : 'Create inventory'}
         </button>
@@ -81,4 +81,3 @@ export default function InventoryList() {
     </div>
   )
 }
-

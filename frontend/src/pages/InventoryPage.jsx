@@ -7,21 +7,24 @@ import Table from '../components/Table'
 import { useTranslation } from 'react-i18next'
 import { renderIdPreview } from '../utils/idPreview'
 import { useAuth } from '../store/auth'
+import UploadImage from '../components/UploadImage'
 
 const groupLabels = {
   text: 'Text',
   mtext: 'Multiple Text',
   num: 'Numbers',
   link: 'External Links',
-  bool: 'Checkboxes (Boolean)'
+  bool: 'Checkboxes (Boolean)',
+  image: 'Images'
 }
 
 const makeEmpty = () => ({
-  text: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  mtext:[{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  num:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  link: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  bool: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
+  text:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
+  mtext: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
+  num:   [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
+  link:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
+  bool:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
+  image: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
 })
 
 const defaultElements = [
@@ -103,7 +106,7 @@ export default function InventoryPage() {
   }
 
   const removeSelected = async () => {
-    const ids = Array.isArray(sel) && sel[0] && Array.isArray(sel[0]) ? sel[0] : sel
+    const ids = Array.isArray(sel) ? sel : []
     if (!ids.length) return
     await api.post(`/api/inventories/${id}/items/bulk-delete`, { ids })
     setSel([]); await load()
@@ -116,6 +119,13 @@ export default function InventoryPage() {
     if (exists.length >= 3) return
     const next = { ...fields, [group]: [...exists, { title:'', desc:'', show:false }] }
     setFields(next)
+  }
+  const moveField = (group, idx, dir) => {
+    const arr = [...fields[group]]
+    const j = idx + dir
+    if (j < 0 || j >= arr.length) return
+    ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
+    setFields({ ...fields, [group]: arr })
   }
   const saveFields = async () => {
     await api.post(`/api/inventories/${id}/fields`, { fields })
@@ -164,22 +174,12 @@ export default function InventoryPage() {
         </label>
       </div>
 
-      <div className="mt-2">
-        <label className="grid gap-1">
-          <span>Image (URL)</span>
-          <input
-            className="px-2 py-1 border rounded"
-            placeholder="https://…"
-            value={inv.imageUrl || ''}
-            onChange={(e)=>setInv({...inv, imageUrl: e.target.value})}
-            disabled={!canEdit}
-          />
-        </label>
-        {inv.imageUrl && (
-          <div className="mt-2">
-            <img src={inv.imageUrl} alt="" className="border rounded max-h-40" />
-          </div>
-        )}
+      <div className="mt-3">
+        <UploadImage
+          label="Inventory image"
+          value={inv.imageUrl || ''}
+          onChange={u => setInv({ ...inv, imageUrl: u })}
+        />
       </div>
 
       <div className="mt-3">
@@ -279,7 +279,7 @@ export default function InventoryPage() {
 
       {tab==='fields' && (
         <div className="grid gap-6 mt-4">
-          {(['text','mtext','num','link','bool']).map(group=>(
+          {(['text','mtext','num','link','bool','image']).map(group=>(
             <div key={group} className="p-3 border rounded">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">{groupLabels[group]}</div>
@@ -291,7 +291,7 @@ export default function InventoryPage() {
               </div>
 
               {fields[group].map((f,idx)=>(
-                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-4">
+                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-5">
                   <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
                     onChange={e=>{
                       const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
@@ -305,10 +305,14 @@ export default function InventoryPage() {
                       onChange={e=>{
                         const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
                       }}/>
-                    <span>Show in table</span>
+                    <span>Show in table/Add item</span>
                   </label>
                   {canEdit && (
                     <div className="flex gap-2">
+                      <button className="px-2 py-1 text-sm border rounded"
+                        onClick={()=>moveField(group, idx, -1)}>↑</button>
+                      <button className="px-2 py-1 text-sm border rounded"
+                        onClick={()=>moveField(group, idx, +1)}>↓</button>
                       <button className="px-2 py-1 text-sm border rounded"
                         onClick={()=>{
                           const next = {...fields}; next[group].splice(idx,1); setFields(next)
