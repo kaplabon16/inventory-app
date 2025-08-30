@@ -16,7 +16,7 @@ router.get('/public-recent', async (_req, res) => {
     take: 8,
     include: {
       _count: { select: { items: true } },
-      owner: { select: { name: true } },
+      owner: { select: { name: true} },
       category: { select: { name: true } },
       tags: { include: { tag: true } }
     }
@@ -32,7 +32,7 @@ router.get('/public-recent', async (_req, res) => {
   })))
 })
 
-/* ---------- LIST ---------- */
+/* ---------- LIST (supports ?take= & returns updatedAt) ---------- */
 router.get('/', async (req, res) => {
   const { mine, canWrite } = req.query
   const userId = req.user?.id
@@ -56,12 +56,20 @@ router.get('/', async (req, res) => {
     return res.json(invs.map(x => ({ id: x.id, title: x.title, itemsCount: x._count.items })))
   }
 
+  // NEW: honor ?take= (1..100), include updatedAt for "x days ago" UI
+  const take = Number.isFinite(+req.query.take) ? Math.max(1, Math.min(+req.query.take, 100)) : 50
   const list = await prisma.inventory.findMany({
     include: { _count: { select: { items: true } }, owner: { select: { name: true } }, category: true },
-    orderBy: { updatedAt: 'desc' }
+    orderBy: { updatedAt: 'desc' },
+    take
   })
   res.json(list.map(x => ({
-    id: x.id, title: x.title, categoryName: x.category.name, ownerName: x.owner.name, itemsCount: x._count.items
+    id: x.id,
+    title: x.title,
+    categoryName: x.category.name,
+    ownerName: x.owner.name,
+    itemsCount: x._count.items,
+    updatedAt: x.updatedAt // <-- added
   })))
 })
 
