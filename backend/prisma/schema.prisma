@@ -142,13 +142,15 @@ model Comment {
   id          String    @id @default(cuid())
   inventoryId String
   itemId      String?
-  userId      String
+  userId      String?   // <- allow anonymous
   body        String    @db.Text
+  guestName   String?   // <- for anonymous posters
+  guestEmail  String?   // <- optional
   createdAt   DateTime  @default(now())
 
   inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
   item      Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  user      User      @relation("CommentUser", fields: [userId], references: [id])
+  user      User?     @relation("CommentUser", fields: [userId], references: [id])
 }
 
 model Tag {
@@ -179,9 +181,9 @@ model InventoryAccess {
 }
 
 model Like {
-  id      String   @id @default(cuid())
-  itemId  String
-  userId  String
+  id        String   @id @default(cuid())
+  itemId    String
+  userId    String
   createdAt DateTime @default(now())
 
   item    Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
