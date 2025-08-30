@@ -31,12 +31,14 @@ export default function App() {
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
 
+            {/* Public all-inventories table */}
+            <Route path="/inventories" element={<InventoryList />} />
+
             {/* Public read-only inventory view */}
             <Route path="/inventories/:id" element={<InventoryPage />} />
 
-            {/* Auth-only */}
+            {/* Auth-only item editor */}
             <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-            <Route path="/inventories" element={<ProtectedRoute><InventoryList /></ProtectedRoute>} />
             <Route path="/inventories/:id/item/:itemId" element={<ProtectedRoute><ItemPage /></ProtectedRoute>} />
 
             {/* Admin-only */}

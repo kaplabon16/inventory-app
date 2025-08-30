@@ -41,6 +41,12 @@ export default function Header() {
       <div className="flex items-center max-w-6xl gap-3 px-4 py-3 mx-auto">
         <Link to="/" className="text-xl font-semibold tracking-tight">{t("app")}</Link>
 
+        <nav className="flex items-center gap-3 ml-2 text-sm">
+          <Link to="/inventories" className="px-2 py-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+            All Inventories
+          </Link>
+        </nav>
+
         <form onSubmit={onSubmit} className="flex-1 max-w-xl ml-3">
           <label className="sr-only" htmlFor="global-search">{t("search")}</label>
           <div className="flex">

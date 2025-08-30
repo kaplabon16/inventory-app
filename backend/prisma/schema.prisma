@@ -76,6 +76,7 @@ enum FieldType {
   NUMBER
   LINK
   BOOL
+  IMAGE
 }
 
 model CustomIdElement {
@@ -130,6 +131,10 @@ model Item {
   bool1  Boolean?
   bool2  Boolean?
   bool3  Boolean?
+
+  img1   String?
+  img2   String?
+  img3   String?
 
   comments Comment[]
   likes    Like[]

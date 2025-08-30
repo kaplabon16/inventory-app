@@ -51,30 +51,8 @@ router.get('/popular', async (req, res) => {
   })))
 })
 
-// GET /api/inventories
+// GET /api/inventories  (public “All Inventories” table)
 router.get('/', async (req, res) => {
-  const { mine, canWrite } = req.query
-  const userId = req.user?.id
-
-  if (mine) {
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
-    const list = await prisma.inventory.findMany({
-      where: { ownerId: userId },
-      include: { _count: { select: { items: true } } }
-    })
-    return res.json(list.map(x => ({ id: x.id, title: x.title, itemsCount: x._count.items })))
-  }
-
-  if (canWrite) {
-    if (!userId) return res.status(401).json({ error: 'Unauthorized' })
-    const acc = await prisma.inventoryAccess.findMany({ where: { userId, canWrite: true } })
-    const invs = await prisma.inventory.findMany({
-      where: { id: { in: acc.map(a => a.inventoryId) } },
-      include: { _count: { select: { items: true } } }
-    })
-    return res.json(invs.map(x => ({ id: x.id, title: x.title, itemsCount: x._count.items })))
-  }
-
   const take = Math.min(Number(req.query.take || 100), 200)
   const list = await prisma.inventory.findMany({
     include: { _count: { select: { items: true } }, owner: { select: { name: true } }, category: true },
@@ -127,6 +105,7 @@ router.get('/:id', async (req, res) => {
       text1: true, text2: true, text3: true,
       num1: true, num2: true, num3: true,
       bool1: true, bool2: true, bool3: true,
+      img1: true, img2: true, img3: true,
     }
   })
 
@@ -135,7 +114,14 @@ router.get('/:id', async (req, res) => {
   res.json({
     inventory: inv,
     canEdit,
-    fields: { text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'), link: pack('LINK'), bool: pack('BOOL') },
+    fields: {
+      text: pack('TEXT'),
+      mtext: pack('MTEXT'),
+      num: pack('NUMBER'),
+      link: pack('LINK'),
+      bool: pack('BOOL'),
+      image: pack('IMAGE'),
+    },
     elements: elems,
     items
   })
@@ -194,15 +180,19 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
     update: { title, description: desc, showInTable: !!show },
     create: { inventoryId: inv.id, type, slot, title, description: desc, showInTable: !!show }
   })
-  ;['text', 'mtext', 'num', 'link', 'bool'].forEach(group => {
-    const type = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL' }[group]
-    // only first 3 slots are valid by schema
-    fields[group].slice(0,3).forEach((cfg, idx) => tx.push(upsert(type, idx + 1, cfg)))
-    // clear any removed slots
-    for (let s = fields[group].length + 1; s <= 3; s++) {
+
+  const groups = ['text','mtext','num','link','bool','image']
+  const typeMap = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL', image: 'IMAGE' }
+
+  groups.forEach(group => {
+    const type = typeMap[group]
+    const arr = fields[group] || []
+    arr.slice(0,3).forEach((cfg, idx) => tx.push(upsert(type, idx + 1, cfg)))
+    for (let s = arr.length + 1; s <= 3; s++) {
       tx.push(prisma.inventoryField.deleteMany({ where: { inventoryId: inv.id, type, slot: s } }))
     }
   })
+
   await prisma.$transaction(tx)
   res.json({ ok: true, message: 'Saved field config' })
 })
@@ -245,6 +235,16 @@ router.post('/:id/items', requireAuth, async (req, res) => {
   res.json(item)
 })
 
+router.post('/:id/items/bulk-delete', requireAuth, async (req, res) => {
+  const { inv, access } = await getInvWithAccess(req.params.id)
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
+  const ids = (req.body?.ids || []).map(String).filter(Boolean)
+  if (!ids.length) return res.json({ ok: true, deleted: 0 })
+  const r = await prisma.item.deleteMany({ where: { id: { in: ids }, inventoryId: inv.id } })
+  res.json({ ok: true, deleted: r.count })
+})
+
 router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   const { inv } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -262,7 +262,14 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
 
   res.json({
     item,
-    fields: { text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'), link: pack('LINK'), bool: pack('BOOL') }
+    fields: {
+      text: pack('TEXT'),
+      mtext: pack('MTEXT'),
+      num: pack('NUMBER'),
+      link: pack('LINK'),
+      bool: pack('BOOL'),
+      image: pack('IMAGE'),
+    }
   })
 })
 

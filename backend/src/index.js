@@ -4,6 +4,8 @@ import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
 import helmet from 'helmet'
 import cors from 'cors'
+import path from 'path'
+import fs from 'fs'
 import bcrypt from 'bcrypt'
 import { PrismaClient } from '@prisma/client'
 import corsCfg from './config/cors.js'
@@ -16,9 +18,14 @@ import userRoutes from './routes/userRoutes.js'
 import searchRoutes from './routes/searchRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
+import uploadRoutes from './routes/uploadRoutes.js'
 
 const prisma = new PrismaClient()
 const app = express()
+
+// ensure uploads dir exists
+const UP = path.resolve('uploads')
+if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 
 // Behind Railway proxy so secure cookies work after OAuth redirects
 app.set('trust proxy', 1)
@@ -26,9 +33,12 @@ app.set('trust proxy', 1)
 // Security + basics
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }))
 app.use(cors(corsCfg))
-app.use(express.json({ limit: '1mb' }))
+app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
+
+// serve uploaded files
+app.use('/uploads', express.static(UP))
 
 // Soft attach user when possible (public pages can show “mine/canWrite” if authed)
 app.use(optionalAuth)
@@ -43,6 +53,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/search', searchRoutes)
 app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
+app.use('/api/upload', uploadRoutes)
 
 // 404 + error
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
