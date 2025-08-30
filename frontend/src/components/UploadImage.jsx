@@ -1,7 +1,12 @@
 import { useRef, useState } from "react"
 import api from "../api/client"
 
-export default function UploadImage({ value, onChange, label = "Image" }) {
+export default function UploadImage({
+  value,
+  onChange,
+  label = "Image",
+  inventoryId,            
+}) {
   const fileRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState("")
@@ -16,7 +21,8 @@ export default function UploadImage({ value, onChange, label = "Image" }) {
       const form = new FormData()
       form.append('file', f)
       const { data } = await api.post('/api/upload', form, {
-        headers: { 'Content-Type': 'multipart/form-data' }
+        headers: { 'Content-Type': 'multipart/form-data' },
+        params: { inventoryId },               // pass inventory id
       })
       onChange?.(data.url)
     } catch (e) {

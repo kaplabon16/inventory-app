@@ -22,13 +22,25 @@ function normalizeRedirect(r) {
   return r.startsWith('/') ? r : '/profile'
 }
 
+// parse JWT_EXPIRES_IN into ms (supports d/h/m/s)
+function parseMs(s='365d'){
+  const m = /^(\d+)([smhd])$/.exec(s.trim())
+  if (!m) return 365*24*60*60*1000
+  const n = +m[1]
+  const unit = m[2]
+  const mult = unit==='s'?1000 : unit==='m'?60*1000 : unit==='h'?60*60*1000 : 24*60*60*1000
+  return n*mult
+}
+
 function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
+  const maxAge = parseMs(process.env.JWT_EXPIRES_IN || '365d')  // default one year
   const opts = {
     httpOnly: true,
     sameSite: 'none',
     secure: true,
     path: '/',
+    maxAge,                                                // PERSIST!
     ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
   }
   res.cookie('token', token, opts)
