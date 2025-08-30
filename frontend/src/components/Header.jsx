@@ -1,3 +1,4 @@
+// src/components/Header.jsx
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../store/auth"
@@ -43,7 +44,7 @@ export default function Header() {
 
         <nav className="flex items-center gap-3 ml-2 text-sm">
           <Link to="/inventories" className="px-2 py-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-            {t("inventories")}
+            All Inventories
           </Link>
         </nav>
 
