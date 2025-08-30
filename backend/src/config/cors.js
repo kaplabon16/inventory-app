@@ -7,12 +7,7 @@ function normalize(u) {
   const s = u.trim()
   if (!s) return null
   const withProto = /^https?:\/\//i.test(s) ? s : `https://${s}`
-  try {
-    const { origin } = new URL(withProto)
-    return origin
-  } catch {
-    return null
-  }
+  try { return new URL(withProto).origin } catch { return null }
 }
 
 const PRIMARY = normalize(process.env.FRONTEND_URL)
@@ -25,13 +20,11 @@ const allow = new Set([PRIMARY, ...EXTRA].filter(Boolean))
 
 export default {
   origin(origin, cb) {
-    // Non-browser / same-origin / health checks
+    // health checks / server-to-server / same-origin
     if (!origin) return cb(null, true)
     try {
       const { origin: o, hostname } = new URL(origin)
-      if (allow.has(o) || /\.vercel\.app$/i.test(hostname)) {
-        return cb(null, true)
-      }
+      if (allow.has(o) || /\.vercel\.app$/i.test(hostname)) return cb(null, true)
       return cb(new Error(`Not allowed by CORS: ${origin}`))
     } catch {
       return cb(new Error(`Invalid origin: ${origin}`))
