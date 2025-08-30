@@ -1,34 +1,38 @@
+// frontend/src/pages/ItemPage.jsx
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
-import { useAuth } from '../store/auth'
 
 export default function ItemPage() {
-  const { user } = useAuth()
   const { id, itemId } = useParams()
   const [item,setItem] = useState(null)
   const [fields,setFields] = useState(null)
   const [likes,setLikes] = useState(0)
   const [liked,setLiked] = useState(false)
+  const [err,setErr] = useState('')
 
   const load = async () => {
-    const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
-    setItem(data.item); setFields(data.fields)
-    const lk = await api.get(`/api/inventories/${id}/items/${itemId}/likes`)
-    setLikes(lk.data.count); setLiked(lk.data.liked)
+    try {
+      const { data } = await api.get(`/inventories/${id}/items/${itemId}`)
+      setItem(data.item); setFields(data.fields); setLikes(data.item?._count?.likes ?? 0); setLiked(!!data.liked)
+    } catch (e) {
+      setErr('Failed to load item')
+    }
   }
   useEffect(()=>{ load() },[id,itemId])
 
   const save = async () => {
-    await api.put(`/api/inventories/${id}/items/${itemId}`, item)
+    await api.put(`/inventories/${id}/items/${itemId}`, item)
     await load()
   }
 
   const toggleLike = async () => {
-    if (!user) { alert('Please sign in to like'); return }
-    const { data } = await api.post(`/api/inventories/${id}/items/${itemId}/like`)
-    setLikes(data.count)
-    setLiked(!liked)
+    try {
+      const { data } = await api.post(`/inventories/${id}/items/${itemId}/like`)
+      setLikes(data.count); setLiked(!!data.liked)
+    } catch (e) {
+      alert('Sign in to like items.')
+    }
   }
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
@@ -37,13 +41,14 @@ export default function ItemPage() {
 
   return (
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
+      {err && <div className="p-2 text-sm text-red-600 border rounded">{err}</div>}
+
       <div className="flex items-center justify-between">
         <div className="flex-1"><b>ID:</b> <input className="w-full px-2 py-1 border rounded"
           value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})}/></div>
         <button onClick={toggleLike}
-          className={`px-2 py-1 ml-3 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer ${liked?'!border-pink-600':''}`}
-          title={liked ? 'Unlike' : 'Like'}>
-          {liked ? '💖' : '🤍'} {likes}
+                className={`px-3 py-1 ml-3 border rounded hover:bg-gray-100 dark:hover:bg-gray-900 ${liked?'text-pink-600 border-pink-600':''}`}>
+          {liked ? '❤️' : '🤍'} {likes}
         </button>
       </div>
 
@@ -83,9 +88,9 @@ export default function ItemPage() {
       ))}
 
       <div className="flex gap-2">
-        <button onClick={save} className="px-3 py-1 border rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800">Save</button>
-        <button onClick={async()=>{ await api.delete(`/api/inventories/${id}/items/${itemId}`); history.back() }}
-          className="px-3 py-1 border rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800">Delete</button>
+        <button onClick={save} className="px-3 py-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Save</button>
+        <button onClick={async()=>{ await api.delete(`/inventories/${id}/items/${itemId}`); history.back() }}
+          className="px-3 py-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-900">Delete</button>
       </div>
     </div>
   )
