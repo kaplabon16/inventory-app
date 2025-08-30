@@ -1,6 +1,5 @@
-
+// src/config/cors.js
 import dotenv from 'dotenv'
-import cors from 'cors'
 dotenv.config()
 
 function normalize(u) {
@@ -24,15 +23,25 @@ const EXTRA = (process.env.CORS_ORIGINS || '')
 
 const allow = new Set([PRIMARY, ...EXTRA].filter(Boolean))
 
+// Helpful startup log
+console.log('[cors] allow list:', [...allow])
+console.log('[cors] note: any *.vercel.app and *.railway.app origins are also allowed')
+
 export default {
   origin(origin, cb) {
     // Non-browser / same-origin / health checks
     if (!origin) return cb(null, true)
     try {
-      const { origin: o, hostname } = new URL(origin)
-      if (allow.has(o) || /\.vercel\.app$/i.test(hostname)) {
-        return cb(null, true)
-      }
+      const u = new URL(origin)
+      const o = u.origin
+      const h = u.hostname
+
+      const allowedHost =
+        allow.has(o) ||
+        /\.vercel\.app$/i.test(h) ||
+        /\.railway\.app$/i.test(h)
+
+      if (allowedHost) return cb(null, true)
       return cb(new Error(`Not allowed by CORS: ${origin}`))
     } catch {
       return cb(new Error(`Invalid origin: ${origin}`))

@@ -1,14 +1,16 @@
+// src/components/LangToggle.jsx
 import { useTranslation } from "react-i18next"
 
-export default function LangToggle() {
+export default function LanguageToggle() {
   const { i18n } = useTranslation()
-  const toggle = () => i18n.changeLanguage(i18n.language === "en" ? "bn" : "en")
+  const next = i18n.language === "en" ? "bn" : "en"
+  const click = () => i18n.changeLanguage(next)
   return (
     <button
-      onClick={toggle}
-      className="px-2 py-1 text-sm border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+      onClick={click}
+      className="px-3 py-1 text-gray-800 bg-gray-200 border rounded dark:bg-gray-700 dark:text-gray-100"
       aria-label="Toggle language"
-      title="Toggle language"
+      title={i18n.language.toUpperCase()}
     >
       {i18n.language.toUpperCase()}
     </button>
