@@ -1,32 +1,12 @@
-// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import MarkdownBox from '../components/MarkdownBox'
 import Toolbar from '../components/Toolbar'
 import Table from '../components/Table'
-import { useTranslation } from 'react-i18next'
-import { renderIdPreview } from '../utils/idPreview'
 import { useAuth } from '../store/auth'
 import UploadImage from '../components/UploadImage'
-
-const groupLabels = {
-  text: 'Text',
-  mtext: 'Multiple Text',
-  num: 'Numbers',
-  link: 'External Links',
-  bool: 'Checkboxes (Boolean)',
-  image: 'Images'
-}
-
-const makeEmpty = () => ({
-  text:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  mtext: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  num:   [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  link:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  bool:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  image: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-})
+import { renderIdPreview } from '../utils/idPreview'
 
 const defaultElements = [
   { order:1, type:'FIXED', param:'INV-' },
@@ -37,13 +17,14 @@ const defaultElements = [
 export default function InventoryPage() {
   const { id } = useParams()
   const nav = useNavigate()
-  const { t } = useTranslation()
   const { user } = useAuth()
 
   const [inv, setInv] = useState(null)
-  const [canEdit, setCanEdit] = useState(false)
+  const [canEdit, setCanEdit] = useState(false)   // owner/admin
+  const [canWrite, setCanWrite] = useState(false) // owner/admin OR publicWrite for any signed-in user
   const [tab, setTab] = useState('items')
-  const [fields,setFields] = useState(makeEmpty())
+  const [fields, setFields] = useState({ text:[], mtext:[], num:[], link:[], bool:[], image:[] })
+  const [fieldsFlat, setFieldsFlat] = useState([]) // NEW: single ordered list across all types
   const [elements,setElements] = useState(defaultElements)
   const [items,setItems] = useState([])
   const [sel,setSel] = useState([])
@@ -59,22 +40,22 @@ export default function InventoryPage() {
     setLoadErr('')
     try {
       const { data } = await api.get(`/api/inventories/${id}`)
-      // Defensive defaults so UI never crashes on partial payloads
-      setInv(data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1, imageUrl: '' })
+      setInv(data?.inventory || null)
       setCanEdit(!!data?.canEdit)
-      setFields(data?.fields || makeEmpty())
+      // Anyone signed-in can write when publicWrite=true
+      setCanWrite(!!data?.canEdit || (!!user && !!data?.inventory?.publicWrite))
+      setFields(data?.fields || { text:[], mtext:[], num:[], link:[], bool:[], image:[] })
+      setFieldsFlat(data?.fieldsFlat || [])
       setElements(data?.elements || defaultElements)
       setVersion(data?.inventory?.version || 1)
       setItems(Array.isArray(data?.items) ? data.items : [])
     } catch (e) {
       setLoadErr('Failed to load inventory.')
-      setInv(null)
-      setItems([])
+      setInv(null); setItems([]); setFieldsFlat([]); setCanEdit(false); setCanWrite(false)
     }
 
-    // categories list is separate call; keep it isolated so a failure here doesn't crash page
     try {
-      const cats = await api.get('/api/categories')
+      const cats = await api.get('/api/categories', { params: { t: Date.now() } })
       setCategories(Array.isArray(cats.data) ? cats.data : [])
     } catch {
       setCategories([])
@@ -84,7 +65,7 @@ export default function InventoryPage() {
 
   const loadStats = async () => {
     try {
-      const { data } = await api.get(`/api/inventories/${id}/stats`)
+      const { data } = await api.get(`/api/inventories/${id}/stats`, { params: { t: Date.now() } })
       setStats(data)
     } catch {
       setStats(null)
@@ -97,7 +78,7 @@ export default function InventoryPage() {
   if (loadErr) return <div className="p-6 text-red-600">{loadErr}</div>
   if (!inv) return <div className="p-6">Loading…</div>
 
-  // Build items table columns based on "show" flags; backend list includes text/num/bool (links & images are edited on item page)
+  // Build items table columns from "show" flags using group config (server still sends group flags for table)
   const itemCols = [
     { key: 'customId', title: 'ID', render:(v,r)=><Link to={user ? `/inventories/${id}/item/${r.id}` : '#'} className="text-blue-600">{v}</Link> },
     ...((fields?.text || []).map((f,idx)=> f?.show ? [{key:`text${idx+1}`, title:f.title?.trim() || `Text ${idx+1}`}] : []).flat()),
@@ -126,48 +107,38 @@ export default function InventoryPage() {
     if (!user) { nav('/login?redirect=' + encodeURIComponent(`/inventories/${id}`)); return }
     try {
       const { data } = await api.post(`/api/inventories/${id}/items`, {})
-      if (data?.id) {
-        window.location.href = `/inventories/${id}/item/${data.id}`
-      } else {
-        toast('Created, but no item id returned.')
-        await load()
-      }
-    } catch {
-      toast('Failed to add item')
+      if (data?.id) window.location.href = `/inventories/${id}/item/${data.id}`
+      else { toast('Created, but no item id returned.'); await load() }
+    } catch (e) {
+      toast(e?.response?.data?.error || 'Failed to add item')
     }
   }
 
-  // IMPORTANT: backend has no /bulk-delete route; delete one-by-one to avoid 404 + crashes
   const removeSelected = async () => {
     const ids = Array.isArray(sel) ? sel : []
     if (!ids.length) return
     try {
-      await Promise.all(ids.map(itemId => api.delete(`/api/inventories/${id}/items/${itemId}`)))
-      setSel([])
-      await load()
+      // use server bulk endpoint to avoid per-item errors
+      await api.post(`/api/inventories/${id}/items/bulk-delete`, { ids })
+      setSel([]); await load()
       toast('Deleted selected items')
     } catch {
       toast('Delete failed for one or more items')
     }
   }
 
-  // helpers for Fields tab
-  const addField = (group) => {
-    const exists = fields[group] || []
-    if (exists.length >= 3) return
-    const next = { ...fields, [group]: [...exists, { title:'', desc:'', show:false }] }
-    setFields(next)
-  }
-  const moveField = (group, idx, dir) => {
-    const arr = [...(fields[group] || [])]
+  // ---------- Cross-type reorder UI ----------
+  const moveFlat = (idx, dir) => {
+    const arr = [...fieldsFlat]
     const j = idx + dir
     if (j < 0 || j >= arr.length) return
     ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
-    setFields({ ...fields, [group]: arr })
+    setFieldsFlat(arr)
   }
+
   const saveFields = async () => {
     try {
-      await api.post(`/api/inventories/${id}/fields`, { fields })
+      await api.post(`/api/inventories/${id}/fields`, { fields, order: fieldsFlat })
       await load()
       toast('Saved field config')
     } catch {
@@ -175,17 +146,21 @@ export default function InventoryPage() {
     }
   }
 
-  // labels for stats numbers using field names
-  const numLabels = [
-    fields.num?.[0]?.title || 'Number 1',
-    fields.num?.[1]?.title || 'Number 2',
-    fields.num?.[2]?.title || 'Number 3'
+  // Tabs (renamed)
+  const tabs = [
+    { k:'items',      label:'Items' },
+    { k:'discussion', label:'Chat' },
+    { k:'settings',   label:'Settings' },
+    { k:'customId',   label:'Custom ID' },
+    ...(canEdit ? [{ k:'access', label:'User Access' }] : []),
+    ...(canEdit ? [{ k:'fields', label:'Custom Fields' }] : []),
+    { k:'stats',      label:'Statistics' },
   ]
 
   return (
     <div className="max-w-6xl p-4 mx-auto">
       <div className="flex flex-wrap items-center gap-3">
-        {canEdit ? (
+        {(canEdit) ? (
           <input className="px-2 py-1 text-xl font-semibold border rounded"
             value={inv.title} onChange={e=>setInv({...inv,title:e.target.value})}/>
         ) : (
@@ -222,15 +197,16 @@ export default function InventoryPage() {
           label="Inventory image"
           value={inv.imageUrl || ''}
           onChange={u => setInv({ ...inv, imageUrl: u })}
+          inventoryId={inv.id}
         />
       </div>
 
       <div className="mt-3">
         <nav className="flex flex-wrap gap-2">
-          {['items','discussion','settings','customId','access','fields','stats'].map(k=>(
+          {tabs.map(({k,label})=>(
             <button key={k} onClick={()=>setTab(k)}
               className={`px-3 py-1 border rounded text-sm ${tab===k?'bg-gray-100 dark:bg-gray-800':''}`}>
-              {k}
+              {label}
             </button>
           ))}
         </nav>
@@ -241,14 +217,14 @@ export default function InventoryPage() {
           <Toolbar
             left={<div className="text-sm text-gray-500">Inventory items</div>}
             right={<>
-              {canEdit && <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>}
-              {canEdit && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
+              {(canWrite) && <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>}
+              {(canWrite) && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
             </>}
           />
           <Table
             columns={itemCols}
             rows={items}
-            onSelect={canEdit ? setSel : undefined}
+            onSelect={canWrite ? setSel : undefined}
             emptyText="No items"
           />
         </>
@@ -325,62 +301,58 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {tab==='fields' && (
+      {tab==='fields' && canEdit && (
         <div className="grid gap-6 mt-4">
+          {/* Simple per-group editor (titles/flags) */}
           {(['text','mtext','num','link','bool','image']).map(group=>(
             <div key={group} className="p-3 border rounded">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-medium">{groupLabels[group]}</div>
-                {canEdit && (fields[group]?.length || 0) < 3 && (
-                  <button onClick={()=>addField(group)} className="px-2 py-1 text-sm border rounded">
-                    Add element
-                  </button>
-                )}
+                <div className="font-medium">{group.toUpperCase()}</div>
               </div>
-
               {(fields[group] || []).map((f,idx)=>(
                 <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-5">
-                  <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
+                  <input className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
                     onChange={e=>{
                       const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
                     }}/>
-                  <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
+                  <input className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
                     onChange={e=>{
                       const next = {...fields}; next[group][idx].desc = e.target.value; setFields(next)
                     }}/>
                   <label className="flex items-center gap-2">
-                    <input type="checkbox" disabled={!canEdit} checked={!!f.show}
+                    <input type="checkbox" checked={!!f.show}
                       onChange={e=>{
                         const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
                       }}/>
                     <span>Show in table/Add item</span>
                   </label>
-                  {canEdit && (
-                    <div className="flex gap-2">
-                      <button className="px-2 py-1 text-sm border rounded"
-                        onClick={()=>moveField(group, idx, -1)}>↑</button>
-                      <button className="px-2 py-1 text-sm border rounded"
-                        onClick={()=>moveField(group, idx, +1)}>↓</button>
-                      <button className="px-2 py-1 text-sm border rounded"
-                        onClick={()=>{
-                          const next = {...fields}; next[group].splice(idx,1); setFields(next)
-                        }}>Remove</button>
-                    </div>
-                  )}
                 </div>
               ))}
-
-              {canEdit && (
-                <div className="mt-2">
-                  <button className="px-3 py-1 text-sm border rounded" onClick={saveFields}>Save</button>
-                </div>
-              )}
             </div>
           ))}
+
+          {/* Cross-type unified reorder */}
+          <div className="p-3 border rounded">
+            <div className="mb-2 font-medium">Display order (all types)</div>
+            <div className="space-y-2">
+              {fieldsFlat.map((f, idx)=>(
+                <div key={`${f.type}-${f.slot}`} className="flex items-center gap-2">
+                  <code className="w-24 px-2 py-1 text-center bg-gray-100 rounded dark:bg-gray-800">{f.type}{f.slot}</code>
+                  <span className="flex-1 truncate">{f.title || '(untitled)'}</span>
+                  <button className="px-2 py-1 text-sm border rounded" onClick={()=>moveFlat(idx, -1)}>↑</button>
+                  <button className="px-2 py-1 text-sm border rounded" onClick={()=>moveFlat(idx, +1)}>↓</button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-2">
+            <button className="px-3 py-1 text-sm border rounded" onClick={saveFields}>Save</button>
+          </div>
         </div>
       )}
 
-      {tab==='access' && (<AccessTab id={id} canEdit={canEdit}/>)}
+      {tab==='access' && canEdit && (<AccessTab id={id}/>)}  {/* only owner/admin */}
 
       {tab==='discussion' && <DiscussionTab id={id}/>}
 
@@ -389,10 +361,9 @@ export default function InventoryPage() {
           {!stats ? <div className="p-4">Loading…</div> : (
             <>
               <div className="p-3 border rounded"><b>Items total:</b> {stats.count}</div>
-
               {[0,1,2].map(i=>(
                 <div key={i} className="p-3 border rounded">
-                  <div className="mb-1 font-medium">{numLabels[i]}</div>
+                  <div className="mb-1 font-medium">{fields?.num?.[i]?.title || `Number ${i+1}`}</div>
                   <div className="grid grid-cols-4 gap-2 text-sm">
                     <div><b>min:</b> {stats[`num${i+1}`].min ?? '-'}</div>
                     <div><b>max:</b> {stats[`num${i+1}`].max ?? '-'}</div>
@@ -401,21 +372,18 @@ export default function InventoryPage() {
                   </div>
                 </div>
               ))}
-
               <div className="p-3 border rounded">
                 <div className="mb-1 font-medium">Most frequent text values</div>
                 {(stats.topText || []).length === 0
                   ? <div className="text-sm text-gray-500">No text values yet</div>
                   : <ul className="ml-6 list-disc">{stats.topText.map((r,i)=><li key={i}>{r.v} — {r.c}</li>)}</ul>}
               </div>
-
               <div className="p-3 border rounded">
                 <div className="mb-1 font-medium">Created timeline (per month)</div>
                 {(stats.timeline || []).length === 0
                   ? <div className="text-sm text-gray-500">No items yet</div>
                   : <ul className="ml-6 list-disc">{stats.timeline.map((r,i)=><li key={i}>{r.month}: {r.count}</li>)}</ul>}
               </div>
-
               <div className="p-3 border rounded">
                 <div className="mb-1 font-medium">Top contributors</div>
                 {(stats.contributors || []).length === 0
@@ -430,7 +398,7 @@ export default function InventoryPage() {
   )
 }
 
-function AccessTab({ id, canEdit }) {
+function AccessTab({ id }) {
   const [users,setUsers] = useState([])
   const [list,setList] = useState([])
   const [q,setQ] = useState('')
@@ -440,9 +408,7 @@ function AccessTab({ id, canEdit }) {
     try {
       const { data } = await api.get(`/api/inventories/${id}/access`)
       setList(Array.isArray(data) ? data : [])
-    } catch {
-      setList([])
-    }
+    } catch { setList([]) }
   }
   useEffect(()=>{ load() },[id])
 
@@ -456,27 +422,23 @@ function AccessTab({ id, canEdit }) {
 
   return (
     <div className="grid gap-3 mt-3">
-      {canEdit && (
-        <>
-          <div className="flex gap-2">
-            <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type email or name"
-              className="flex-1 px-2 py-1 border rounded"/>
-          </div>
-          {q && (
-            <div className="p-2 border rounded">
-              {users.map(u=>(
-                <div key={u.id} className="flex items-center justify-between py-1">
-                  <div>{u.name} &lt;{u.email}&gt;</div>
-                  <button className="px-2 py-1 text-sm border rounded"
-                    onClick={async()=>{
-                      await api.post(`/api/inventories/${id}/access`,{ userId: u.id, canWrite:true })
-                      setQ(''); await load()
-                    }}>Add</button>
-                </div>
-              ))}
+      <div className="flex gap-2">
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Type email or name"
+          className="flex-1 px-2 py-1 border rounded"/>
+      </div>
+      {q && (
+        <div className="p-2 border rounded">
+          {users.map(u=>(
+            <div key={u.id} className="flex items-center justify-between py-1">
+              <div>{u.name} &lt;{u.email}&gt;</div>
+              <button className="px-2 py-1 text-sm border rounded"
+                onClick={async()=>{
+                  await api.post(`/api/inventories/${id}/access`,{ userId: u.id, canWrite:true })
+                  setQ(''); await load()
+                }}>Add</button>
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
       <div className="flex items-center gap-2">
         <span className="text-sm">Sort:</span>
@@ -491,17 +453,15 @@ function AccessTab({ id, canEdit }) {
             <div>{x.name} &lt;{x.email}&gt;</div>
             <div className="flex gap-2">
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" disabled={!canEdit} checked={!!x.canWrite} onChange={async(e)=>{
+                <input type="checkbox" checked={!!x.canWrite} onChange={async(e)=>{
                   await api.put(`/api/inventories/${id}/access/${x.userId}`, { canWrite: e.target.checked })
                   await load()
                 }}/> write
               </label>
-              {canEdit && (
-                <button className="px-2 py-1 text-sm border rounded"
-                  onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
-                  Remove
-                </button>
-              )}
+              <button className="px-2 py-1 text-sm border rounded"
+                onClick={async()=>{ await api.delete(`/api/inventories/${id}/access/${x.userId}`); await load() }}>
+                Remove
+              </button>
             </div>
           </div>
         ))}
@@ -519,9 +479,7 @@ function DiscussionTab({ id }) {
     try {
       const { data } = await api.get(`/api/inventories/${id}/comments`)
       setList(Array.isArray(data) ? data : [])
-    } catch {
-      setList([])
-    }
+    } catch { setList([]) }
   }
   useEffect(()=>{ load() },[id])
 

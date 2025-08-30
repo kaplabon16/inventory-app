@@ -6,6 +6,7 @@ import { requireAdmin } from '../middleware/requireAdmin.js'
 const router = Router()
 
 router.get('/', async (_req, res) => {
+  res.set('Cache-Control','no-store')
   const list = await prisma.category.findMany({ orderBy: { name: 'asc' } })
   res.json(list)
 })

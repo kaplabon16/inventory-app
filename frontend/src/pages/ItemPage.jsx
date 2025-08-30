@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
 import UploadImage from '../components/UploadImage'
@@ -7,12 +7,14 @@ export default function ItemPage() {
   const { id, itemId } = useParams()
   const [item,setItem] = useState(null)
   const [fields,setFields] = useState(null)
+  const [fieldsFlat, setFieldsFlat] = useState([]) // NEW
   const [likes,setLikes] = useState(0)
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
     setItem(data.item)
     setFields(data.fields)
+    setFieldsFlat(data.fieldsFlat || [])
     setLikes(data.item?._count?.likes ?? 0)
   }
   useEffect(()=>{ load() },[id,itemId])
@@ -29,7 +31,71 @@ export default function ItemPage() {
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
-  const shown = (arr) => arr.map((f,idx)=>({ ...f, _i: idx })).filter(f => f.show && (f.title||'').trim() !== '')
+  // Render inputs following cross-type order
+  const ordered = useMemo(
+    () => (fieldsFlat?.length ? fieldsFlat : []).filter(f=>fields[f.group]?.[f.slot-1]?.show),
+    [fieldsFlat, fields]
+  )
+
+  const inputFor = (f) => {
+    const keyBase = f.group.toLowerCase()
+    const key = (keyBase === 'number' ? 'num' : keyBase === 'text' ? 'text' : keyBase === 'mtext' ? 'mtext' : keyBase === 'link' ? 'link' : keyBase === 'bool' ? 'bool' : 'img') + f.slot
+    const label = fields[f.group.toLowerCase()]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
+
+    switch (f.group) {
+      case 'TEXT':
+        return (
+          <label className="grid gap-1">
+            <span>{label}</span>
+            <input value={item[key]||''} onChange={e=>setItem({...item, [key]: e.target.value})}
+              className="px-2 py-1 border rounded"/>
+          </label>
+        )
+      case 'MTEXT':
+        return (
+          <label className="grid gap-1">
+            <span>{label}</span>
+            <textarea rows={4} value={item[key]||''} onChange={e=>setItem({...item, [key]: e.target.value})}
+              className="px-2 py-1 border rounded"/>
+          </label>
+        )
+      case 'NUMBER':
+        return (
+          <label className="grid gap-1">
+            <span>{label}</span>
+            <input type="number" value={item[key]??''} onChange={e=>setItem({...item, [key]: e.target.valueAsNumber})}
+              className="px-2 py-1 border rounded"/>
+          </label>
+        )
+      case 'LINK':
+        return (
+          <label className="grid gap-1">
+            <span>{label}</span>
+            <input type="url" value={item[key]||''} onChange={e=>setItem({...item, [key]: e.target.value})}
+              className="px-2 py-1 border rounded"/>
+          </label>
+        )
+      case 'BOOL':
+        return (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={!!item[key]} onChange={e=>setItem({...item, [key]: e.target.checked})}/>
+            <span>{label}</span>
+          </label>
+        )
+      case 'IMAGE':
+        return (
+          <div className="grid gap-1">
+            <UploadImage
+              label={label}
+              value={item[`img${f.slot}`] || ''}
+              onChange={(u)=>setItem({...item, [`img${f.slot}`]: u})}
+              inventoryId={id}
+            />
+          </div>
+        )
+      default: return null
+    }
+  }
 
   return (
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
@@ -39,50 +105,7 @@ export default function ItemPage() {
         <button onClick={toggleLike} className="px-2 py-1 ml-3 border rounded">👍 {likes}</button>
       </div>
 
-      {shown(fields.text).map((f)=>(
-        <label key={`t${f._i}`} className="grid gap-1">
-          <span>{f.title}</span>
-          <input value={item[`text${f._i+1}`]||''} onChange={e=>setItem({...item, [`text${f._i+1}`]: e.target.value})}
-            className="px-2 py-1 border rounded"/>
-        </label>
-      ))}
-      {shown(fields.mtext).map((f)=>(
-        <label key={`m${f._i}`} className="grid gap-1">
-          <span>{f.title}</span>
-          <textarea rows={4} value={item[`mtext${f._i+1}`]||''} onChange={e=>setItem({...item, [`mtext${f._i+1}`]: e.target.value})}
-            className="px-2 py-1 border rounded"/>
-        </label>
-      ))}
-      {shown(fields.num).map((f)=>(
-        <label key={`n${f._i}`} className="grid gap-1">
-          <span>{f.title}</span>
-          <input type="number" value={item[`num${f._i+1}`]??''} onChange={e=>setItem({...item, [`num${f._i+1}`]: e.target.valueAsNumber})}
-            className="px-2 py-1 border rounded"/>
-        </label>
-      ))}
-      {shown(fields.link).map((f)=>(
-        <label key={`l${f._i}`} className="grid gap-1">
-          <span>{f.title}</span>
-          <input type="url" value={item[`link${f._i+1}`]||''} onChange={e=>setItem({...item, [`link${f._i+1}`]: e.target.value})}
-            className="px-2 py-1 border rounded"/>
-        </label>
-      ))}
-      {shown(fields.bool).map((f)=>(
-        <label key={`b${f._i}`} className="flex items-center gap-2">
-          <input type="checkbox" checked={!!item[`bool${f._i+1}`]} onChange={e=>setItem({...item, [`bool${f._i+1}`]: e.target.checked})}/>
-          <span>{f.title}</span>
-        </label>
-      ))}
-
-      {shown(fields.image).map((f)=>(
-        <div key={`img${f._i}`} className="grid gap-1">
-          <UploadImage
-            label={f.title}
-            value={item[`img${f._i+1}`] || ''}
-            onChange={(u)=>setItem({...item, [`img${f._i+1}`]: u})}
-          />
-        </div>
-      ))}
+      {ordered.map((f,i)=><div key={`${f.group}-${f.slot}-${i}`}>{inputFor(f)}</div>)}
 
       <div className="flex gap-2">
         <button onClick={save} className="px-3 py-1 border rounded">Save</button>
