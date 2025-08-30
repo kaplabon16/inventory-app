@@ -12,14 +12,9 @@ export default function ThemeToggle() {
     const html = document.documentElement
     if (dark) {
       html.classList.add("dark")
-      // AMOLED: force true black bg on body/html
-      document.documentElement.style.backgroundColor = '#000000'
-      document.body.style.backgroundColor = '#000000'
       localStorage.setItem("theme", "dark")
     } else {
       html.classList.remove("dark")
-      document.documentElement.style.backgroundColor = ''
-      document.body.style.backgroundColor = ''
       localStorage.setItem("theme", "light")
     }
   }, [dark])
@@ -30,7 +25,7 @@ export default function ThemeToggle() {
       onClick={() => setDark(v => !v)}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
       title={dark ? "Light mode" : "Dark mode"}
-      className="p-2 transition rounded-full cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+      className="p-2 transition rounded-full hover:bg-gray-200 dark:hover:bg-gray-700"
     >
       {dark ? (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-5 h-5"><path fill="currentColor" d="M6.76 4.84l-1.8-1.79L3.17 4.84l1.79 1.8l1.8-1.8zm10.48 0l1.8-1.79l1.79 1.79l-1.79 1.8l-1.8-1.8zM12 4V1h-0v3h0zm0 19v-3h0v3h0zM4 13H1v-2h3v2zm19 0h-3v-2h3v2zM6.76 19.16l-1.8 1.8l-1.79-1.8l1.79-1.79l1.8 1.79zm10.48 0l1.8 1.8l1.79-1.8l-1.79-1.79l-1.8 1.79zM12 18a6 6 0 1 1 0-12a6 6 0 0 1 0 12z"/></svg>
