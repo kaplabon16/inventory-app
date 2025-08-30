@@ -20,7 +20,7 @@ import categoriesRoutes from './routes/categoriesRoutes.js'
 const prisma = new PrismaClient()
 const app = express()
 
-// Behind Railway proxy so secure cookies work after OAuth redirects
+// Behind Railway / proxies so secure cookies + redirects behave
 app.set('trust proxy', 1)
 
 // Security + basics
@@ -30,7 +30,7 @@ app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
 
-// Soft attach user when possible (public pages can show “mine/canWrite” if authed)
+// Soft attach user for read-only checks and convenience
 app.use(optionalAuth)
 
 // Health
@@ -79,7 +79,7 @@ async function ensureDefaultAdmin() {
 }
 
 async function seedCategories() {
-  const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
+  const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Book', 'Other']
   for (const name of names) {
     await prisma.category.upsert({
       where: { name },
