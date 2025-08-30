@@ -1,6 +1,4 @@
-// src/components/Table.jsx
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useNavigate } from "react-router-dom"
 
 /**
  * Controlled table with multi-select.
@@ -14,7 +12,6 @@ import { useNavigate } from "react-router-dom"
  *  - emptyText?: string
  */
 export default function Table({ columns, rows, selected, onSelect, rowLink, emptyText = "No data" }) {
-  const navigate = useNavigate()
   const controlled = Array.isArray(selected)
   const [internal, setInternal] = useState(() => new Set())
   const sel = useMemo(() => (controlled ? new Set(selected) : internal), [controlled, selected, internal])
@@ -48,13 +45,6 @@ export default function Table({ columns, rows, selected, onSelect, rowLink, empt
     if (checked) next.add(String(id))
     else next.delete(String(id))
     setSel(next)
-  }
-
-  const go = (r) => {
-    if (!rowLink) return
-    const to = rowLink(r)
-    if (!to) return
-    navigate(to) // client-side nav (no full page reload)
   }
 
   return (
@@ -91,9 +81,7 @@ export default function Table({ columns, rows, selected, onSelect, rowLink, empt
               <tr
                 key={id}
                 className={`border-t ${clickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''}`}
-                onClick={() => go(r)}
-                onKeyDown={(e) => { if (clickable && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); go(r) } }}
-                tabIndex={clickable ? 0 : -1}
+                onClick={() => { if (clickable) window.location.assign(rowLink(r)) }}
               >
                 {onSelect && (
                   <td className="w-10 p-2" onClick={(e) => e.stopPropagation()}>

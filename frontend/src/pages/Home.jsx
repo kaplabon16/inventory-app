@@ -1,87 +1,66 @@
-// src/pages/Home.jsx
-import { useNavigate, Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useEffect, useState } from "react"
 import api, { apiUrl } from "../api/client"
 import { useAuth } from "../store/auth"
 import Table from "../components/Table"
-import dayjs from "dayjs"
-import relativeTime from "dayjs/plugin/relativeTime"
-dayjs.extend(relativeTime)
 
 export default function Home() {
-  const [rows, setRows] = useState([])
   const { user } = useAuth()
-  const navigate = useNavigate()
+  const nav = useNavigate()
+  const [latest, setLatest] = useState([])
+  const [popular, setPopular] = useState([])
+  const [creating, setCreating] = useState(false)
+  const [err, setErr] = useState("")
 
   useEffect(() => {
-    let active = true
+    let live = true
     ;(async () => {
       try {
-        // backend now supports ?take, returns updatedAt as well
-        const res = await api.get(apiUrl("/inventories"), { params: { take: 12 } })
-        const data = Array.isArray(res.data) ? res.data : (res.data?.data || res.data || [])
-        if (active) setRows(data)
-      } catch {
-        if (active) setRows([])
+        const [a, b] = await Promise.all([
+          api.get(apiUrl("/inventories/public-recent"), { params: { take: 10 } }),
+          api.get(apiUrl("/inventories/popular"), { params: { take: 5 } }),
+        ])
+        if (!live) return
+        setLatest(a.data || [])
+        setPopular(b.data || [])
+      } catch (e) {
+        if (!live) return
+        setLatest([]); setPopular([])
       }
     })()
-    return () => (active = false)
+    return () => (live = false)
   }, [])
 
-  const create = async () => {
-    if (!user) { navigate("/login?redirect=/inventories"); return }
+  const createNow = async () => {
+    // one click create (no extra page)
+    if (!user) { nav("/login?redirect=/inventories"); return }
+    setCreating(true); setErr("")
     try {
       const { data } = await api.post(apiUrl("/inventories"), { title: "New Inventory", description: "", categoryId: 1 })
       const id = data?.id || data?.inventory?.id
-      if (id) navigate(`/inventories/${id}`)
-    } catch {
-      // simple fallback: go to the list page which still has the create action
-      navigate("/inventories")
+      if (id) nav(`/inventories/${id}`)
+      else setErr("Created, but no ID returned. Please refresh.")
+    } catch (e) {
+      setErr(e?.response?.data?.error || "Failed to create inventory.")
+    } finally {
+      setCreating(false)
     }
   }
 
-  const Card = ({ inv }) => (
-    <div
-      className="p-4 transition bg-white border rounded-lg dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800"
-    >
-      <Link to={`/inventories/${inv.id}`} className="block">
-        <div className="text-lg font-medium">{inv.title}</div>
-        <div className="mt-1 text-xs text-gray-500">
-          <span className="inline-block px-2 py-0.5 rounded bg-gray-100 dark:bg-gray-800 mr-2">{inv.categoryName}</span>
-          {inv.itemsCount} items • {dayjs(inv.updatedAt || Date.now()).fromNow()}
-        </div>
-        <div className="mt-3 text-sm text-gray-600 dark:text-gray-300">
-          <span className="opacity-80">Owner:</span> {inv.ownerName ?? "-"}
-        </div>
-      </Link>
-    </div>
-  )
-
   return (
-    <div className="max-w-6xl mx-auto">
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="font-medium">Inventories</h2>
+    <div className="max-w-6xl mx-auto space-y-8">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Latest Inventories</h2>
         <button
-          onClick={create}
-          className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+          onClick={createNow}
+          disabled={creating}
+          className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
         >
-          Create inventory
+          {creating ? "Creating…" : "Create inventory"}
         </button>
       </div>
+      {err && <div className="mb-3 text-sm text-red-600">{err}</div>}
 
-      {/* Recent Public Inventories – card grid */}
-      <div className="mb-6">
-        <h3 className="mb-2 text-lg font-semibold">Recent Public Inventories</h3>
-        {rows.length === 0 ? (
-          <div className="p-4 text-sm text-gray-500 border rounded">No inventories yet</div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {rows.slice(0, 8).map((inv) => <Card key={inv.id} inv={inv} />)}
-          </div>
-        )}
-      </div>
-
-      {/* Table (kept for power users) */}
       <Table
         columns={[
           { key: "title", title: "Title" },
@@ -89,10 +68,24 @@ export default function Home() {
           { key: "ownerName", title: "Owner" },
           { key: "itemsCount", title: "Items" },
         ]}
-        rows={rows}
+        rows={latest}
         rowLink={(r) => `/inventories/${r.id}`}
         emptyText="No data"
       />
+
+      <div>
+        <h3 className="mb-2 text-lg font-semibold">Top 5 Popular</h3>
+        <Table
+          columns={[
+            { key: "title", title: "Title" },
+            { key: "itemsCount", title: "Items" },
+            { key: "categoryName", title: "Category" },
+          ]}
+          rows={popular}
+          rowLink={(r) => `/inventories/${r.id}`}
+          emptyText="No data"
+        />
+      </div>
     </div>
   )
 }
