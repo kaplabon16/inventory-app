@@ -31,15 +31,19 @@ export default function ItemPage() {
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
-  // Render inputs following cross-type order
   const ordered = useMemo(
-    () => (fieldsFlat?.length ? fieldsFlat : []).filter(f=>fields[f.group]?.[f.slot-1]?.show),
+    () => (fieldsFlat?.length ? fieldsFlat : []).filter(f=>fields[f.group?.toLowerCase()]?.[f.slot-1]?.show),
     [fieldsFlat, fields]
   )
 
   const inputFor = (f) => {
     const keyBase = f.group.toLowerCase()
-    const key = (keyBase === 'number' ? 'num' : keyBase === 'text' ? 'text' : keyBase === 'mtext' ? 'mtext' : keyBase === 'link' ? 'link' : keyBase === 'bool' ? 'bool' : 'img') + f.slot
+    const key =
+      (keyBase === 'number' ? 'num'
+      : keyBase === 'text' ? 'text'
+      : keyBase === 'mtext' ? 'mtext'
+      : keyBase === 'link' ? 'link'
+      : keyBase === 'bool' ? 'bool' : 'img') + f.slot
     const label = fields[f.group.toLowerCase()]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
 
     switch (f.group) {
