@@ -10,7 +10,9 @@ export default function ItemPage() {
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
-    setItem(data.item); setFields(data.fields); setLikes(data.item?._count?.likes ?? 0)
+    setItem(data.item)
+    setFields(data.fields)
+    setLikes(data.item?._count?.likes ?? 0)
   }
   useEffect(()=>{ load() },[id,itemId])
 
