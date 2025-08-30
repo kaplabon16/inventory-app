@@ -58,17 +58,18 @@ model Inventory {
 }
 
 model InventoryField {
-  id          String    @id @default(cuid())
-  inventoryId String
-  inventory   Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
-  type        FieldType
-  slot        Int
-  title       String
-  description String?
-  showInTable Boolean   @default(false)
-  displayOrder Int      @default(0) // ✅ NEW
+  id           String    @id @default(cuid())
+  inventoryId  String
+  inventory    Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+  type         FieldType
+  slot         Int
+  title        String
+  description  String?
+  showInTable  Boolean   @default(false)
+  displayOrder Int       @default(0) // << added
 
   @@unique([inventoryId, type, slot])
+  @@index([displayOrder])
 }
 
 enum FieldType {
@@ -185,9 +186,9 @@ model InventoryAccess {
 }
 
 model Like {
-  id      String   @id @default(cuid())
-  itemId  String
-  userId  String
+  id        String   @id @default(cuid())
+  itemId    String
+  userId    String
   createdAt DateTime @default(now())
 
   item    Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
