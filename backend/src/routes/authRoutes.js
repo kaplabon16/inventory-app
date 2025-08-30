@@ -3,8 +3,8 @@ import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
+import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
-import { configurePassport } from '../passport.js' // <-- FIXED PATH
 
 const prisma = new PrismaClient()
 const router = Router()
@@ -22,21 +22,13 @@ function normalizeRedirect(r) {
   return r.startsWith('/') ? r : '/profile'
 }
 
-// parse JWT_EXPIRES_IN into ms (supports d/h/m/s)
-function parseMs(s='365d'){
-  const m = /^(\d+)([smhd])$/.exec(s.trim())
-  if (!m) return 365*24*60*60*1000
-  const n = +m[1]
-  const unit = m[2]
-  const mult = unit==='s'?1000 : unit==='m'?60*1000 : unit==='h'?60*60*1000 : 24*60*60*1000
-  return n*mult
-}
-
 function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
-  const maxAge = parseMs(process.env.JWT_EXPIRES_IN || '365d')
   const opts = {
-    httpOnly: true, sameSite: 'none', secure: true, path: '/', maxAge,
+    httpOnly: true,
+    sameSite: 'none',
+    secure: true,
+    path: '/',
     ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
   }
   res.cookie('token', token, opts)
@@ -49,7 +41,7 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-/* ---------- OAuth ---------- */
+// ---------- OAuth ----------
 router.get('/google', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('google', { scope: ['profile','email'], state, session: false })(req, res, next)
@@ -60,8 +52,7 @@ router.get('/google/callback',
   async (req, res) => {
     setCookieToken(res, req.user)
     const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
-    // Top-level redirect (ensures cookie is set)
-    res.send(`<!doctype html><meta http-equiv="refresh" content="0; url=${frontendBase}${rd}"><script>location.replace(${JSON.stringify(frontendBase + rd)})</script>`)
+    res.redirect(`${frontendBase}${rd}`)
   }
 )
 
@@ -75,12 +66,11 @@ router.get('/github/callback',
   async (req, res) => {
     setCookieToken(res, req.user)
     const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
-    res.send(`<!doctype html><meta http-equiv="refresh" content="0; url=${frontendBase}${rd}"><script>location.replace(${JSON.stringify(frontendBase + rd)})</script>`)
+    res.redirect(`${frontendBase}${rd}`)
   }
 )
 
-/* ---------- Email/password ---------- */
-
+// ---------- Email/password ----------
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}

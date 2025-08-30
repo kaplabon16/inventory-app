@@ -1,4 +1,3 @@
-// src/components/Header.jsx
 import { useEffect, useRef, useState } from "react"
 import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useAuth } from "../store/auth"
@@ -72,7 +71,7 @@ export default function Header() {
                 {t("login")}
               </Link>
               <Link to="/register" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                {t("register")}
+                Register
               </Link>
             </>
           ) : (
@@ -97,3 +96,4 @@ export default function Header() {
     </header>
   )
 }
+

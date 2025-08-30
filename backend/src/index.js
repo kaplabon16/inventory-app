@@ -1,4 +1,3 @@
-// src/index.js
 import 'dotenv/config'
 import express from 'express'
 import cookieParser from 'cookie-parser'
@@ -31,13 +30,9 @@ if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 // Behind Railway proxy so secure cookies work after OAuth redirects
 app.set('trust proxy', 1)
 
-/* ************* CRITICAL: CORS FIRST ************* */
-app.use(cors(corsCfg))
-app.options('*', cors(corsCfg)) // handle all preflight
-/* *********************************************** */
-
 // Security + basics
 app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }))
+app.use(cors(corsCfg))
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
@@ -114,3 +109,6 @@ const PORT = process.env.PORT || 5045
     console.log(`API listening on :${PORT}`)
   })
 })()
+
+
+
