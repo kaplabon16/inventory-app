@@ -1,39 +1,46 @@
-// frontend/src/store/auth.js
 import { create } from 'zustand'
 import api, { setAuthToken } from '../api/client'
 
-export const useAuth = create((set) => ({
+export const useAuth = create((set, get) => ({
   user: null,
   loading: true,
 
-  hydrate: async () => {
+  async loadMe() {
     try {
-      const { data } = await api.get('/auth/me') // <- NO /api prefix
+      const { data } = await api.get('/api/auth/me')
       set({ user: data || null, loading: false })
     } catch {
       set({ user: null, loading: false })
     }
   },
 
-  register: async ({ name, email, password }) => {
-    const { data } = await api.post('/auth/register', { name, email, password })
-    set({ user: data })
-    setAuthToken(null)
-    return data
+  async hydrate() {
+    // if token persisted, attach before first /me
+    const saved = localStorage.getItem('auth_token')
+    if (saved) setAuthToken(saved)
+    return get().loadMe()
   },
 
-  login: async ({ email, password }) => {
-    const { data } = await api.post('/auth/login', { email, password })
-    set({ user: data })
-    setAuthToken(null)
-    return data
+  loginGoogle(redirect='/profile') {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/google?redirect=${encodeURIComponent(redirect)}`
   },
 
-  logout: async () => {
-    try { await api.post('/auth/logout') } catch {}
-    set({ user: null })
-    setAuthToken(null)
+  loginGithub(redirect='/profile') {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/github?redirect=${encodeURIComponent(redirect)}`
   },
 
-  setUser: (u) => set({ user: u }),
+  async logout() {
+    try { await api.post('/api/auth/logout') } finally {
+      setAuthToken(null)
+      set({ user: null })
+      window.location.href = '/'
+    }
+  },
+
+  setUser(u) { set({ user: u }) },
+
+  setToken(t) { setAuthToken(t) }
 }))
+

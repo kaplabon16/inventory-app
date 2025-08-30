@@ -1,42 +1,36 @@
-// frontend/src/api/client.js
 import axios from 'axios'
 
-// Accept either:
-// - VITE_API_BASE = https://your-backend.example.com   (preferred)
-// - VITE_API_BASE = https://your-backend.example.com/api (we'll trim /api)
-function normalizeOrigin(raw) {
-  const fallback = 'http://localhost:3000'
-  const base = (raw || fallback).replace(/\/+$/, '')
-  return base.endsWith('/api') ? base.slice(0, -4) : base
-}
+const RAW = import.meta.env.VITE_API_BASE || ''
+const BASE = RAW.replace(/\/+$/,'').replace(/\/api$/i, '')
 
-const ORIGIN = normalizeOrigin(import.meta.env.VITE_API_BASE)
-const API_BASE = ORIGIN + '/api'
+export const apiUrl = (path = '') => {
+  const p = path.startsWith('/') ? path : `/${path}`
+  return `/api${p}`
+}
 
 const api = axios.create({
-  baseURL: API_BASE,        // e.g. https://inventoryapp-app.up.railway.app/api
-  withCredentials: true,    // send/receive cookies cross-site
+  baseURL: BASE,
+  withCredentials: true,
+  headers: { 'Content-Type': 'application/json' },
 })
 
-// Optional helper for absolute URLs (used by a few places)
-export const apiUrl = (path = '') => {
-  const p = String(path || '')
-  // If caller already passed /api/... keep it; otherwise prefix /api
-  return ORIGIN + (p.startsWith('/api') ? p : `/api${p.startsWith('/') ? p : `/${p}`}`)
+function applyAuthHeader() {
+  const t = localStorage.getItem('auth_token')
+  if (t) api.defaults.headers.common['Authorization'] = `Bearer ${t}`
+  else delete api.defaults.headers.common['Authorization']
 }
+applyAuthHeader()
 
-// Optional legacy helper – we use cookies, but keep this for compatibility
-export const setAuthToken = (token) => {
-  if (token) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-  } else {
-    delete api.defaults.headers.common['Authorization']
-  }
+// allow other modules to refresh header after we set/clear token
+export function setAuthToken(token) {
+  if (token) localStorage.setItem('auth_token', token)
+  else localStorage.removeItem('auth_token')
+  applyAuthHeader()
 }
 
 if (typeof window !== 'undefined') {
-  console.log('[api] origin =', ORIGIN, '| baseURL =', api.defaults.baseURL)
+  console.log('[api] baseURL =', api.defaults.baseURL)
 }
 
-export { ORIGIN, API_BASE }
 export default api
+
