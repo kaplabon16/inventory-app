@@ -1,4 +1,4 @@
-// src/api/client.js
+// frontend/src/api/client.js
 import axios from 'axios'
 
 const base =
@@ -7,16 +7,24 @@ const base =
 
 const api = axios.create({
   baseURL: base.replace(/\/+$/, '') + '/api',
-  withCredentials: true, // <-- REQUIRED for cross-site cookies
+  withCredentials: true, // send/receive cookies cross-site
 })
 
-// (optional) tiny helper for building absolute URLs for links
+// Optional: allow legacy code to set/remove Authorization header.
+// We still rely on cookies, but this keeps older imports working.
+export const setAuthToken = (token) => {
+  if (token) {
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+  } else {
+    delete api.defaults.headers.common['Authorization']
+  }
+}
+
+// Helper used in a few places to build absolute URLs
 export const apiUrl = (path = '') =>
   (base.replace(/\/+$/, '') + (path.startsWith('/api') ? path : `/api${path}`))
 
-// Log base once to help debug
 if (typeof window !== 'undefined') {
-  // eslint-disable-next-line no-console
   console.log('[api] baseURL =', api.defaults.baseURL?.replace('/api',''))
 }
 
