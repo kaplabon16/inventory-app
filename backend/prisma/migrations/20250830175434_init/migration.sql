@@ -1,5 +1,5 @@
 -- CreateEnum
-CREATE TYPE "FieldType" AS ENUM ('TEXT', 'MTEXT', 'NUMBER', 'LINK', 'BOOL');
+CREATE TYPE "FieldType" AS ENUM ('TEXT', 'MTEXT', 'NUMBER', 'LINK', 'BOOL', 'IMAGE');
 
 -- CreateEnum
 CREATE TYPE "IdElemType" AS ENUM ('FIXED', 'RAND20', 'RAND32', 'RAND6', 'RAND9', 'GUID', 'DATE', 'SEQ');
@@ -15,6 +15,7 @@ CREATE TABLE "User" (
     "roles" TEXT[] DEFAULT ARRAY[]::TEXT[],
     "blocked" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "password" TEXT,
 
     CONSTRAINT "User_pkey" PRIMARY KEY ("id")
 );
@@ -52,6 +53,7 @@ CREATE TABLE "InventoryField" (
     "title" TEXT NOT NULL,
     "description" TEXT,
     "showInTable" BOOLEAN NOT NULL DEFAULT false,
+    "displayOrder" INTEGER NOT NULL DEFAULT 0,
 
     CONSTRAINT "InventoryField_pkey" PRIMARY KEY ("id")
 );
@@ -99,6 +101,9 @@ CREATE TABLE "Item" (
     "bool1" BOOLEAN,
     "bool2" BOOLEAN,
     "bool3" BOOLEAN,
+    "img1" TEXT,
+    "img2" TEXT,
+    "img3" TEXT,
 
     CONSTRAINT "Item_pkey" PRIMARY KEY ("id")
 );
@@ -140,6 +145,16 @@ CREATE TABLE "InventoryAccess" (
     CONSTRAINT "InventoryAccess_pkey" PRIMARY KEY ("inventoryId","userId")
 );
 
+-- CreateTable
+CREATE TABLE "Like" (
+    "id" TEXT NOT NULL,
+    "itemId" TEXT NOT NULL,
+    "userId" TEXT NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "Like_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
@@ -148,6 +163,9 @@ CREATE UNIQUE INDEX "Category_name_key" ON "Category"("name");
 
 -- CreateIndex
 CREATE INDEX "Inventory_ownerId_idx" ON "Inventory"("ownerId");
+
+-- CreateIndex
+CREATE INDEX "InventoryField_displayOrder_idx" ON "InventoryField"("displayOrder");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "InventoryField_inventoryId_type_slot_key" ON "InventoryField"("inventoryId", "type", "slot");
@@ -160,6 +178,9 @@ CREATE UNIQUE INDEX "Item_inventoryId_customId_key" ON "Item"("inventoryId", "cu
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Tag_name_key" ON "Tag"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Like_itemId_userId_key" ON "Like"("itemId", "userId");
 
 -- AddForeignKey
 ALTER TABLE "Inventory" ADD CONSTRAINT "Inventory_ownerId_fkey" FOREIGN KEY ("ownerId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -186,7 +207,7 @@ ALTER TABLE "Item" ADD CONSTRAINT "Item_createdById_fkey" FOREIGN KEY ("createdB
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_inventoryId_fkey" FOREIGN KEY ("inventoryId") REFERENCES "Inventory"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "Comment" ADD CONSTRAINT "Comment_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "Comment" ADD CONSTRAINT "Comment_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "Comment" ADD CONSTRAINT "Comment_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -202,3 +223,9 @@ ALTER TABLE "InventoryAccess" ADD CONSTRAINT "InventoryAccess_inventoryId_fkey" 
 
 -- AddForeignKey
 ALTER TABLE "InventoryAccess" ADD CONSTRAINT "InventoryAccess_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Like" ADD CONSTRAINT "Like_itemId_fkey" FOREIGN KEY ("itemId") REFERENCES "Item"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE "Like" ADD CONSTRAINT "Like_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
