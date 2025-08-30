@@ -21,7 +21,6 @@ function applyAuthHeader() {
 }
 applyAuthHeader()
 
-// allow other modules to refresh header after we set/clear token
 export function setAuthToken(token) {
   if (token) localStorage.setItem('auth_token', token)
   else localStorage.removeItem('auth_token')
@@ -29,8 +28,7 @@ export function setAuthToken(token) {
 }
 
 if (typeof window !== 'undefined') {
-  console.log('[api] baseURL =', api.defaults.baseURL)
+  console.log('[api] baseURL =', api.defaults.baseURL, '— full URL example:', api.defaults.baseURL + apiUrl('/health'))
 }
 
 export default api
-

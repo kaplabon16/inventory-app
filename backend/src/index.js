@@ -23,24 +23,28 @@ import uploadRoutes from './routes/uploadRoutes.js'
 const prisma = new PrismaClient()
 const app = express()
 
-// ensure uploads dir exists
+// trust proxy for Railway so secure cookies work
+app.set('trust proxy', 1)
+
+// ensure uploads dir
 const UP = path.resolve('uploads')
 if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 
-// Behind Railway proxy so secure cookies work after OAuth redirects
-app.set('trust proxy', 1)
+// ---- CORS FIRST, and keep it for preflight + errors
+app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next() })
+app.use(cors(corsCfg))
+app.options('*', cors(corsCfg))
 
 // Security + basics
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }))
-app.use(cors(corsCfg))
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
 
-// serve uploaded files
+// static uploads
 app.use('/uploads', express.static(UP))
 
-// Soft attach user when possible (public pages can show “mine/canWrite” if authed)
+// soft attach user if token present (for public pages)
 app.use(optionalAuth)
 
 // Health
@@ -55,10 +59,14 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 app.use('/api/upload', uploadRoutes)
 
-// 404 + error
+// 404
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
+
+// Errors — make sure CORS still applies
 app.use((err, _req, res, _next) => {
   console.error('[server error]', err)
+  // reflect credentials-safe CORS headers even on error
+  res.setHeader('Vary','Origin')
   res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
 
@@ -105,10 +113,5 @@ const PORT = process.env.PORT || 5045
 ;(async () => {
   await ensureDefaultAdmin()
   await seedCategories()
-  app.listen(PORT, () => {
-    console.log(`API listening on :${PORT}`)
-  })
+  app.listen(PORT, () => console.log(`API listening on :${PORT}`))
 })()
-
-
-
