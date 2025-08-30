@@ -24,7 +24,7 @@ export default function InventoryList() {
   useEffect(() => { load() }, [])
 
   const create = async () => {
-    if (!user) { nav('/login'); return }
+    if (!user) { nav('/login?redirect=/inventories'); return }
     setLoading(true)
     setError('')
     try {
@@ -45,7 +45,7 @@ export default function InventoryList() {
     <div className="max-w-6xl p-6 mx-auto">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-medium">Inventories</h2>
-        <button onClick={create} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800" disabled={loading}>
+        <button onClick={create} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer" disabled={loading}>
           {loading ? 'Creating…' : 'Create inventory'}
         </button>
       </div>
