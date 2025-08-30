@@ -1,3 +1,4 @@
+// frontend/src/store/auth.js
 import { create } from 'zustand'
 import api, { setAuthToken } from '../api/client'
 
@@ -5,41 +6,37 @@ export const useAuth = create((set, get) => ({
   user: null,
   loading: true,
 
-  async loadMe() {
+  hydrate: async () => {
     try {
-      const { data } = await api.get('/api/auth/me')
+      const { data } = await api.get('/auth/me')
       set({ user: data || null, loading: false })
     } catch {
       set({ user: null, loading: false })
     }
   },
 
-  async hydrate() {
-    // if token persisted, attach before first /me
-    const saved = localStorage.getItem('auth_token')
-    if (saved) setAuthToken(saved)
-    return get().loadMe()
+  register: async ({ name, email, password }) => {
+    const { data } = await api.post('/auth/register', { name, email, password })
+    // Cookie is set by the server; no need to store anything locally
+    set({ user: data })
+    // Ensure we’re not keeping a stale Bearer header around
+    setAuthToken(null)
+    return data
   },
 
-  loginGoogle(redirect='/profile') {
-    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
-    window.location.href = `${base}/api/auth/google?redirect=${encodeURIComponent(redirect)}`
+  login: async ({ email, password }) => {
+    const { data } = await api.post('/auth/login', { email, password })
+    set({ user: data })
+    // We’re cookie-first; make sure any previous header is cleared
+    setAuthToken(null)
+    return data
   },
 
-  loginGithub(redirect='/profile') {
-    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
-    window.location.href = `${base}/api/auth/github?redirect=${encodeURIComponent(redirect)}`
+  logout: async () => {
+    try { await api.post('/auth/logout') } catch {}
+    set({ user: null })
+    setAuthToken(null)
   },
 
-  async logout() {
-    try { await api.post('/api/auth/logout') } finally {
-      setAuthToken(null)
-      set({ user: null })
-      window.location.href = '/'
-    }
-  },
-
-  setUser(u) { set({ user: u }) },
-
-  setToken(t) { setAuthToken(t) }
+  setUser: (u) => set({ user: u }),
 }))
