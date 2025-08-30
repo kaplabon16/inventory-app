@@ -1,3 +1,4 @@
+// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -38,6 +39,7 @@ export default function InventoryPage() {
   const nav = useNavigate()
   const { t } = useTranslation()
   const { user } = useAuth()
+
   const [inv, setInv] = useState(null)
   const [canEdit, setCanEdit] = useState(false)
   const [tab, setTab] = useState('items')
@@ -49,37 +51,58 @@ export default function InventoryPage() {
   const [categories, setCategories] = useState([])
   const [flash, setFlash] = useState('')
   const [stats, setStats] = useState(null)
+  const [loadErr, setLoadErr] = useState('')
 
   const toast = (msg) => { setFlash(msg); setTimeout(()=>setFlash(''), 2000) }
 
   const load = async () => {
-    const { data } = await api.get(`/api/inventories/${id}`)
-    setInv(data.inventory)
-    setCanEdit(!!data.canEdit)
-    setFields(data.fields || makeEmpty())
-    setElements(data.elements || defaultElements)
-    setVersion(data.inventory.version)
-    setItems(data.items || [])
-    const cats = await api.get('/api/categories')
-    setCategories(cats.data || [])
+    setLoadErr('')
+    try {
+      const { data } = await api.get(`/api/inventories/${id}`)
+      // Defensive defaults so UI never crashes on partial payloads
+      setInv(data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1, imageUrl: '' })
+      setCanEdit(!!data?.canEdit)
+      setFields(data?.fields || makeEmpty())
+      setElements(data?.elements || defaultElements)
+      setVersion(data?.inventory?.version || 1)
+      setItems(Array.isArray(data?.items) ? data.items : [])
+    } catch (e) {
+      setLoadErr('Failed to load inventory.')
+      setInv(null)
+      setItems([])
+    }
+
+    // categories list is separate call; keep it isolated so a failure here doesn't crash page
+    try {
+      const cats = await api.get('/api/categories')
+      setCategories(Array.isArray(cats.data) ? cats.data : [])
+    } catch {
+      setCategories([])
+    }
   }
   useEffect(()=>{ load() },[id])
 
   const loadStats = async () => {
-    const { data } = await api.get(`/api/inventories/${id}/stats`)
-    setStats(data)
+    try {
+      const { data } = await api.get(`/api/inventories/${id}/stats`)
+      setStats(data)
+    } catch {
+      setStats(null)
+    }
   }
   useEffect(()=>{ if (tab==='stats') loadStats() },[tab])
 
-  const idPreview = useMemo(()=>renderIdPreview(elements),[elements])
+  const idPreview = useMemo(()=>renderIdPreview(elements || []),[elements])
 
+  if (loadErr) return <div className="p-6 text-red-600">{loadErr}</div>
   if (!inv) return <div className="p-6">Loading…</div>
 
+  // Build items table columns based on "show" flags; backend list includes text/num/bool (links & images are edited on item page)
   const itemCols = [
     { key: 'customId', title: 'ID', render:(v,r)=><Link to={user ? `/inventories/${id}/item/${r.id}` : '#'} className="text-blue-600">{v}</Link> },
-    ...(fields.text.map((f,idx)=> f.show ? [{key:`text${idx+1}`, title:f.title || `Text ${idx+1}`}] : []).flat()),
-    ...(fields.num.map((f,idx)=> f.show ? [{key:`num${idx+1}`, title:f.title || `Number ${idx+1}`}] : []).flat()),
-    ...(fields.bool.map((f,idx)=> f.show ? [{key:`bool${idx+1}`, title:f.title || `Flag ${idx+1}`, render:(val)=> val ? '✓' : ''}] : []).flat())
+    ...((fields?.text || []).map((f,idx)=> f?.show ? [{key:`text${idx+1}`, title:f.title?.trim() || `Text ${idx+1}`}] : []).flat()),
+    ...((fields?.num  || []).map((f,idx)=> f?.show ? [{key:`num${idx+1}`,  title:f.title?.trim() || `Number ${idx+1}`}] : []).flat()),
+    ...((fields?.bool || []).map((f,idx)=> f?.show ? [{key:`bool${idx+1}`, title:f.title?.trim() || `Flag ${idx+1}`, render:(val)=> val ? '✓' : ''}] : []).flat())
   ]
 
   const saveSettings = async () => {
@@ -101,35 +124,55 @@ export default function InventoryPage() {
 
   const addItem = async () => {
     if (!user) { nav('/login?redirect=' + encodeURIComponent(`/inventories/${id}`)); return }
-    const { data } = await api.post(`/api/inventories/${id}/items`, {})
-    window.location.href = `/inventories/${id}/item/${data.id}`
+    try {
+      const { data } = await api.post(`/api/inventories/${id}/items`, {})
+      if (data?.id) {
+        window.location.href = `/inventories/${id}/item/${data.id}`
+      } else {
+        toast('Created, but no item id returned.')
+        await load()
+      }
+    } catch {
+      toast('Failed to add item')
+    }
   }
 
+  // IMPORTANT: backend has no /bulk-delete route; delete one-by-one to avoid 404 + crashes
   const removeSelected = async () => {
     const ids = Array.isArray(sel) ? sel : []
     if (!ids.length) return
-    await api.post(`/api/inventories/${id}/items/bulk-delete`, { ids })
-    setSel([]); await load()
-    toast('Deleted selected items')
+    try {
+      await Promise.all(ids.map(itemId => api.delete(`/api/inventories/${id}/items/${itemId}`)))
+      setSel([])
+      await load()
+      toast('Deleted selected items')
+    } catch {
+      toast('Delete failed for one or more items')
+    }
   }
 
   // helpers for Fields tab
   const addField = (group) => {
-    const exists = fields[group]
+    const exists = fields[group] || []
     if (exists.length >= 3) return
     const next = { ...fields, [group]: [...exists, { title:'', desc:'', show:false }] }
     setFields(next)
   }
   const moveField = (group, idx, dir) => {
-    const arr = [...fields[group]]
+    const arr = [...(fields[group] || [])]
     const j = idx + dir
     if (j < 0 || j >= arr.length) return
     ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
     setFields({ ...fields, [group]: arr })
   }
   const saveFields = async () => {
-    await api.post(`/api/inventories/${id}/fields`, { fields })
-    await load(); toast('Saved field config')
+    try {
+      await api.post(`/api/inventories/${id}/fields`, { fields })
+      await load()
+      toast('Saved field config')
+    } catch {
+      toast('Failed to save fields')
+    }
   }
 
   // labels for stats numbers using field names
@@ -169,7 +212,7 @@ export default function InventoryPage() {
       <div className="mt-2 text-sm">
         <label className="flex items-center gap-2">
           <span>Public write access</span>
-          <input type="checkbox" disabled={!canEdit} checked={inv.publicWrite}
+          <input type="checkbox" disabled={!canEdit} checked={!!inv.publicWrite}
             onChange={e=>setInv({...inv, publicWrite: e.target.checked})}/>
         </label>
       </div>
@@ -202,7 +245,12 @@ export default function InventoryPage() {
               {canEdit && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
             </>}
           />
-          <Table columns={itemCols} rows={items} onSelect={canEdit ? setSel : undefined}/>
+          <Table
+            columns={itemCols}
+            rows={items}
+            onSelect={canEdit ? setSel : undefined}
+            emptyText="No items"
+          />
         </>
       )}
 
@@ -237,7 +285,7 @@ export default function InventoryPage() {
         <div className="grid gap-3 mt-3">
           <div><b>Preview:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview}</code></div>
           <div className="text-sm text-gray-500">ID Elements</div>
-          {elements.sort((a,b)=>a.order-b.order).map((el,idx)=>(
+          {[...(elements || [])].sort((a,b)=>a.order-b.order).map((el,idx)=>(
             <div key={idx} className="grid items-center gap-2 md:grid-cols-4">
               <select disabled={!canEdit} value={el.type} onChange={e=>{
                 const next=[...elements]; next[idx]={...el,type:e.target.value}; setElements(next)
@@ -266,7 +314,7 @@ export default function InventoryPage() {
           ))}
           {canEdit && (
             <div>
-              <button onClick={()=>setElements([...elements,{order:elements.length+1,type:'FIXED',param:'-'}])}
+              <button onClick={()=>setElements([...(elements||[]),{order:(elements?.length||0)+1,type:'FIXED',param:'-'}])}
                 className="px-3 py-1 text-sm border rounded">Add element</button>
               <button onClick={async()=>{
                 await api.post(`/api/inventories/${id}/custom-id`, { elements })
@@ -283,14 +331,14 @@ export default function InventoryPage() {
             <div key={group} className="p-3 border rounded">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium">{groupLabels[group]}</div>
-                {canEdit && fields[group].length < 3 && (
+                {canEdit && (fields[group]?.length || 0) < 3 && (
                   <button onClick={()=>addField(group)} className="px-2 py-1 text-sm border rounded">
                     Add element
                   </button>
                 )}
               </div>
 
-              {fields[group].map((f,idx)=>(
+              {(fields[group] || []).map((f,idx)=>(
                 <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-5">
                   <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
                     onChange={e=>{
@@ -387,16 +435,25 @@ function AccessTab({ id, canEdit }) {
   const [list,setList] = useState([])
   const [q,setQ] = useState('')
   const [sort,setSort] = useState('name')
+
   const load = async () => {
-    const { data } = await api.get(`/api/inventories/${id}/access`)
-    setList(data)
+    try {
+      const { data } = await api.get(`/api/inventories/${id}/access`)
+      setList(Array.isArray(data) ? data : [])
+    } catch {
+      setList([])
+    }
   }
   useEffect(()=>{ load() },[id])
+
   const findUsers = async (text) => {
-    const { data } = await api.get('/api/users/search', { params: { q: text } })
-    setUsers(data)
+    try {
+      const { data } = await api.get('/api/users/search', { params: { q: text } })
+      setUsers(Array.isArray(data) ? data : [])
+    } catch { setUsers([]) }
   }
   useEffect(()=>{ if(q) findUsers(q) },[q])
+
   return (
     <div className="grid gap-3 mt-3">
       {canEdit && (
@@ -434,7 +491,7 @@ function AccessTab({ id, canEdit }) {
             <div>{x.name} &lt;{x.email}&gt;</div>
             <div className="flex gap-2">
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" disabled={!canEdit} checked={x.canWrite} onChange={async(e)=>{
+                <input type="checkbox" disabled={!canEdit} checked={!!x.canWrite} onChange={async(e)=>{
                   await api.put(`/api/inventories/${id}/access/${x.userId}`, { canWrite: e.target.checked })
                   await load()
                 }}/> write
@@ -457,16 +514,24 @@ function AccessTab({ id, canEdit }) {
 function DiscussionTab({ id }) {
   const [list,setList] = useState([])
   const [txt,setTxt] = useState('')
+
   const load = async () => {
-    const { data } = await api.get(`/api/inventories/${id}/comments`)
-    setList(data)
+    try {
+      const { data } = await api.get(`/api/inventories/${id}/comments`)
+      setList(Array.isArray(data) ? data : [])
+    } catch {
+      setList([])
+    }
   }
   useEffect(()=>{ load() },[id])
+
   const post = async () => {
-    if (!txt.trim()) return
-    await api.post(`/api/inventories/${id}/comments`, { body: txt })
+    const body = (txt || '').trim()
+    if (!body) return
+    await api.post(`/api/inventories/${id}/comments`, { body })
     setTxt(''); await load()
   }
+
   return (
     <div className="grid gap-3 mt-3">
       <div className="p-2 border rounded">
@@ -479,7 +544,7 @@ function DiscussionTab({ id }) {
         {list.length===0 && <div className="p-4 text-center text-gray-500">No comments</div>}
       </div>
       <div className="flex gap-2">
-        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded"/>
+        <input value={txt} onChange={e=>setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded" placeholder="Write a comment…"/>
         <button onClick={post} className="px-3 py-1 text-sm border rounded">Post</button>
       </div>
     </div>
