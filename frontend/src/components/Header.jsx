@@ -43,7 +43,7 @@ export default function Header() {
 
         <nav className="flex items-center gap-3 ml-2 text-sm">
           <Link to="/inventories" className="px-2 py-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-            All Inventories
+            {t("inventories")}
           </Link>
         </nav>
 
@@ -71,7 +71,7 @@ export default function Header() {
                 {t("login")}
               </Link>
               <Link to="/register" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
-                Register
+                {t("register")}
               </Link>
             </>
           ) : (
