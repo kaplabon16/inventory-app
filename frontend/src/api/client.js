@@ -1,35 +1,23 @@
+// src/api/client.js
 import axios from 'axios'
 
-const RAW = import.meta.env.VITE_API_BASE || ''
-const BASE = RAW.replace(/\/+$/,'').replace(/\/api$/i, '')
-
-export const apiUrl = (path = '') => {
-  const p = path.startsWith('/') ? path : `/${path}`
-  return `/api${p}`
-}
+const base =
+  import.meta.env.VITE_API_BASE ||
+  'http://localhost:3000' // fallback for local dev
 
 const api = axios.create({
-  baseURL: BASE,
-  withCredentials: true,
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: base.replace(/\/+$/, '') + '/api',
+  withCredentials: true, // <-- REQUIRED for cross-site cookies
 })
 
-function applyAuthHeader() {
-  const t = localStorage.getItem('auth_token')
-  if (t) api.defaults.headers.common['Authorization'] = `Bearer ${t}`
-  else delete api.defaults.headers.common['Authorization']
-}
-applyAuthHeader()
+// (optional) tiny helper for building absolute URLs for links
+export const apiUrl = (path = '') =>
+  (base.replace(/\/+$/, '') + (path.startsWith('/api') ? path : `/api${path}`))
 
-// allow other modules to refresh header after we set/clear token
-export function setAuthToken(token) {
-  if (token) localStorage.setItem('auth_token', token)
-  else localStorage.removeItem('auth_token')
-  applyAuthHeader()
-}
-
+// Log base once to help debug
 if (typeof window !== 'undefined') {
-  console.log('[api] baseURL =', api.defaults.baseURL)
+  // eslint-disable-next-line no-console
+  console.log('[api] baseURL =', api.defaults.baseURL?.replace('/api',''))
 }
 
 export default api

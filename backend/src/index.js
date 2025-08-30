@@ -1,100 +1,89 @@
+// src/index.js
 import 'dotenv/config'
 import express from 'express'
-import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
 import helmet from 'helmet'
 import cors from 'cors'
-import bcrypt from 'bcrypt'
-import { PrismaClient } from '@prisma/client'
-import corsCfg from './config/cors.js'
-import { optionalAuth } from './middleware/auth.js'
+import cookieParser from 'cookie-parser'
 
-// Routes
+// --- your routers ---
 import authRoutes from './routes/authRoutes.js'
 import inventoryRoutes from './routes/inventoryRoutes.js'
-import userRoutes from './routes/userRoutes.js'
-import searchRoutes from './routes/searchRoutes.js'
-import adminRoutes from './routes/adminRoutes.js'
-import categoriesRoutes from './routes/categoriesRoutes.js'
+// (add any other routers you have)
 
-const prisma = new PrismaClient()
+// -------- CORS ORIGIN WHITELIST ----------
+const FRONTEND = (process.env.FRONTEND_URL || '').trim()
+// allow your prod Vercel, optional local dev, and Vercel previews (*.vercel.app)
+const extraAllowed = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://inventory-app-one-iota.vercel.app',
+].filter(Boolean)
+
+const allowedOrigins = [
+  ...extraAllowed,
+  ...(FRONTEND ? [FRONTEND] : [])
+]
+
+// For *.vercel.app previews
+const vercelPreviewRe = /\.vercel\.app$/i
+
+const corsOptions = {
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true) // curl / server-to-server / SSR
+    const ok = allowedOrigins.includes(origin) || vercelPreviewRe.test(new URL(origin).hostname)
+    if (ok) return cb(null, true)
+    return cb(new Error(`CORS: ${origin} not allowed`))
+  },
+  credentials: true,
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
+}
+
+// -----------------------------------------
 const app = express()
 
-// Behind Railway / proxies so secure cookies + redirects behave
+// You are behind Railway's proxy; needed for secure cookies
 app.set('trust proxy', 1)
 
-// Security + basics
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }))
-app.use(cors(corsCfg))
+// Minimal hardening; allow cross-origin resources
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  contentSecurityPolicy: false, // you can fine-tune later
+}))
+
+// Always set Vary: Origin so caches don't bite CORS
+app.use((req,res,next) => { res.setHeader('Vary','Origin'); next() })
+
+// CORS first, before any routes
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions)) // preflight responder
+
+// Body & cookies
 app.use(express.json({ limit: '1mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
 
-// Soft attach user for read-only checks and convenience
-app.use(optionalAuth)
-
-// Health
+// Health checks
+app.get('/', (_req, res) => res.send('OK'))
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
-// API
+// API routes
 app.use('/api/auth', authRoutes)
 app.use('/api/inventories', inventoryRoutes)
-app.use('/api/users', userRoutes)
-app.use('/api/search', searchRoutes)
-app.use('/api/admin', adminRoutes)
-app.use('/api/categories', categoriesRoutes)
 
-// 404 + error
-app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
-app.use((err, _req, res, _next) => {
-  console.error('[server error]', err)
-  res.status(err.status || 500).json({ error: err.message || 'Server error' })
+// 404 (keep CORS headers intact)
+app.use((req, res) => {
+  res.status(404).json({ error: 'NOT_FOUND' })
 })
 
-// --- Bootstrap admin + seed ----
-async function ensureDefaultAdmin() {
-  const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com'
-  const plain = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme'
-  const existing = await prisma.user.findUnique({ where: { email: adminEmail } })
-  const hash = await bcrypt.hash(plain, 10)
+// Error handler (keeps ACAO header because CORS ran first)
+app.use((err, _req, res, _next) => {
+  console.error('SERVER_ERR', err?.message || err)
+  res.status(500).json({ error: 'SERVER_ERROR' })
+})
 
-  if (!existing) {
-    await prisma.user.create({
-      data: {
-        email: adminEmail,
-        name: 'Admin',
-        password: hash,
-        roles: ['ADMIN'],
-        blocked: false,
-      }
-    })
-    console.log(`[bootstrap] Created default admin ${adminEmail}`)
-  } else if (!existing.roles?.includes('ADMIN')) {
-    await prisma.user.update({
-      where: { id: existing.id },
-      data: { roles: { set: ['ADMIN'] }, password: existing.password || hash }
-    })
-    console.log(`[bootstrap] Promoted ${adminEmail} to ADMIN`)
-  }
-}
-
-async function seedCategories() {
-  const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Book', 'Other']
-  for (const name of names) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name }
-    })
-  }
-  console.log('[seed] Categories ensured')
-}
-
-const PORT = process.env.PORT || 5045
-;(async () => {
-  await ensureDefaultAdmin()
-  await seedCategories()
-  app.listen(PORT, () => {
-    console.log(`API listening on :${PORT}`)
-  })
-})()
+const PORT = process.env.PORT || 3000
+app.listen(PORT, () => {
+  console.log(`API on :${PORT}`)
+})
