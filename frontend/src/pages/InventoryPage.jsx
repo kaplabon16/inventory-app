@@ -1,4 +1,3 @@
-// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -42,6 +41,7 @@ export default function InventoryPage() {
 
   const [inv, setInv] = useState(null)
   const [canEdit, setCanEdit] = useState(false)
+  const [canWrite, setCanWrite] = useState(false) // ✅ NEW
   const [tab, setTab] = useState('items')
   const [fields,setFields] = useState(makeEmpty())
   const [elements,setElements] = useState(defaultElements)
@@ -61,6 +61,7 @@ export default function InventoryPage() {
       const { data } = await api.get(`/api/inventories/${id}`)
       setInv(data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1, imageUrl: '' })
       setCanEdit(!!data?.canEdit)
+      setCanWrite(!!data?.canWrite) // ✅ fetch from API
       setFields(data?.fields || makeEmpty())
       setElements(data?.elements || defaultElements)
       setVersion(data?.inventory?.version || 1)
@@ -121,6 +122,7 @@ export default function InventoryPage() {
 
   const addItem = async () => {
     if (!user) { nav('/login?redirect=' + encodeURIComponent(`/inventories/${id}`)); return }
+    if (!canWrite) { toast('You do not have write access.'); return }
     try {
       const { data } = await api.post(`/api/inventories/${id}/items`, {})
       if (data?.id) {
@@ -135,6 +137,7 @@ export default function InventoryPage() {
   }
 
   const removeSelected = async () => {
+    if (!canWrite) { toast('You do not have write access.'); return }
     const ids = Array.isArray(sel) ? sel : []
     if (!ids.length) return
     try {
@@ -212,11 +215,13 @@ export default function InventoryPage() {
       </div>
 
       <div className="mt-3">
+        {/* ✅ Only show upload controls if user can write (or edit) */}
         <UploadImage
           label="Inventory image"
           value={inv.imageUrl || ''}
           onChange={u => setInv({ ...inv, imageUrl: u })}
-          inventoryId={id} // ✅ ensure backend accepts the upload
+          inventoryId={id}
+          canWrite={canWrite || canEdit}
         />
       </div>
 
@@ -236,14 +241,14 @@ export default function InventoryPage() {
           <Toolbar
             left={<div className="text-sm text-gray-500">Inventory items</div>}
             right={<>
-              {canEdit && <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>}
-              {canEdit && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
+              {(canWrite) && <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>}
+              {(canWrite) && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
             </>}
           />
           <Table
             columns={itemCols}
             rows={items}
-            onSelect={canEdit ? setSel : undefined}
+            onSelect={canWrite ? setSel : undefined}
             emptyText="No items"
           />
         </>

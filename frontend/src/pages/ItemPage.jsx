@@ -7,8 +7,9 @@ export default function ItemPage() {
   const { id, itemId } = useParams()
   const [item,setItem] = useState(null)
   const [fields,setFields] = useState(null)
-  const [fieldsFlat, setFieldsFlat] = useState([]) // NEW
+  const [fieldsFlat, setFieldsFlat] = useState([])
   const [likes,setLikes] = useState(0)
+  const [canWrite, setCanWrite] = useState(false) // ✅ NEW
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
@@ -16,10 +17,12 @@ export default function ItemPage() {
     setFields(data.fields)
     setFieldsFlat(data.fieldsFlat || [])
     setLikes(data.item?._count?.likes ?? 0)
+    setCanWrite(!!data.canWrite) // ✅ from API
   }
   useEffect(()=>{ load() },[id,itemId])
 
   const save = async () => {
+    if (!canWrite) return
     await api.put(`/api/inventories/${id}/items/${itemId}`, item)
     await load()
   }
@@ -29,22 +32,34 @@ export default function ItemPage() {
     setLikes(data.count)
   }
 
+  // ✅ Hooks MUST NOT be called conditionally — compute ordered safely here
+  const ordered = useMemo(() => {
+    if (!fields || !fieldsFlat) return []
+    const mapKey = (g) => {
+      const k = (g || '').toString().toLowerCase()
+      if (k === 'number') return 'num' // backend 'NUMBER' -> 'num'
+      return k
+    }
+    return (fieldsFlat || [])
+      .filter(f => {
+        const key = mapKey(f.group)
+        const arr = fields[key] || []
+        const cfg = arr[f.slot - 1]
+        return !!cfg?.show
+      })
+  }, [fields, fieldsFlat])
+
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
-  const ordered = useMemo(
-    () => (fieldsFlat?.length ? fieldsFlat : []).filter(f=>fields[f.group?.toLowerCase()]?.[f.slot-1]?.show),
-    [fieldsFlat, fields]
-  )
-
   const inputFor = (f) => {
-    const keyBase = f.group.toLowerCase()
+    const base = (f.group || '').toString().toLowerCase()
     const key =
-      (keyBase === 'number' ? 'num'
-      : keyBase === 'text' ? 'text'
-      : keyBase === 'mtext' ? 'mtext'
-      : keyBase === 'link' ? 'link'
-      : keyBase === 'bool' ? 'bool' : 'img') + f.slot
-    const label = fields[f.group.toLowerCase()]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
+      (base === 'number' ? 'num'
+      : base === 'text' ? 'text'
+      : base === 'mtext' ? 'mtext'
+      : base === 'link' ? 'link'
+      : base === 'bool' ? 'bool' : 'img') + f.slot
+    const label = fields[(base === 'number' ? 'num' : base)]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
 
     switch (f.group) {
       case 'TEXT':
@@ -52,7 +67,7 @@ export default function ItemPage() {
           <label className="grid gap-1">
             <span>{label}</span>
             <input value={item[key]||''} onChange={e=>setItem({...item, [key]: e.target.value})}
-              className="px-2 py-1 border rounded"/>
+              className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
       case 'MTEXT':
@@ -60,7 +75,7 @@ export default function ItemPage() {
           <label className="grid gap-1">
             <span>{label}</span>
             <textarea rows={4} value={item[key]||''} onChange={e=>setItem({...item, [key]: e.target.value})}
-              className="px-2 py-1 border rounded"/>
+              className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
       case 'NUMBER':
@@ -68,7 +83,7 @@ export default function ItemPage() {
           <label className="grid gap-1">
             <span>{label}</span>
             <input type="number" value={item[key]??''} onChange={e=>setItem({...item, [key]: e.target.valueAsNumber})}
-              className="px-2 py-1 border rounded"/>
+              className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
       case 'LINK':
@@ -76,13 +91,13 @@ export default function ItemPage() {
           <label className="grid gap-1">
             <span>{label}</span>
             <input type="url" value={item[key]||''} onChange={e=>setItem({...item, [key]: e.target.value})}
-              className="px-2 py-1 border rounded"/>
+              className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
       case 'BOOL':
         return (
           <label className="flex items-center gap-2">
-            <input type="checkbox" checked={!!item[key]} onChange={e=>setItem({...item, [key]: e.target.checked})}/>
+            <input type="checkbox" checked={!!item[key]} onChange={e=>setItem({...item, [key]: e.target.checked})} disabled={!canWrite}/>
             <span>{label}</span>
           </label>
         )
@@ -94,6 +109,7 @@ export default function ItemPage() {
               value={item[`img${f.slot}`] || ''}
               onChange={(u)=>setItem({...item, [`img${f.slot}`]: u})}
               inventoryId={id}
+              canWrite={canWrite} // ✅ hide controls if cannot write
             />
           </div>
         )
@@ -105,16 +121,16 @@ export default function ItemPage() {
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
       <div className="flex items-center justify-between">
         <div><b>ID:</b> <input className="w-full px-2 py-1 border rounded"
-          value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})}/></div>
+          value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})} disabled={!canWrite}/></div>
         <button onClick={toggleLike} className="px-2 py-1 ml-3 border rounded">👍 {likes}</button>
       </div>
 
       {ordered.map((f,i)=><div key={`${f.group}-${f.slot}-${i}`}>{inputFor(f)}</div>)}
 
       <div className="flex gap-2">
-        <button onClick={save} className="px-3 py-1 border rounded">Save</button>
-        <button onClick={async()=>{ await api.delete(`/api/inventories/${id}/items/${itemId}`); history.back() }}
-          className="px-3 py-1 border rounded">Delete</button>
+        <button onClick={save} className="px-3 py-1 border rounded" disabled={!canWrite}>Save</button>
+        <button onClick={async()=>{ if (!canWrite) return; await api.delete(`/api/inventories/${id}/items/${itemId}`); history.back() }}
+          className="px-3 py-1 border rounded" disabled={!canWrite}>Delete</button>
       </div>
     </div>
   )
