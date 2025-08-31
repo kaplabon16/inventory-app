@@ -3,14 +3,15 @@ import express from 'express'
 import cookieParser from 'cookie-parser'
 import morgan from 'morgan'
 import helmet from 'helmet'
+import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
 import bcrypt from 'bcrypt'
 import { PrismaClient } from '@prisma/client'
-import corsCfg, { applyCors } from './config/cors.js'
+import corsCfg from './config/cors.js'
 import { optionalAuth } from './middleware/auth.js'
 
-// Routes...
+// Routes
 import authRoutes from './routes/authRoutes.js'
 import inventoryRoutes from './routes/inventoryRoutes.js'
 import userRoutes from './routes/userRoutes.js'
@@ -21,23 +22,35 @@ import uploadRoutes from './routes/uploadRoutes.js'
 
 const prisma = new PrismaClient()
 const app = express()
+
+// trust proxy for Railway so secure cookies work
 app.set('trust proxy', 1)
 
+// ensure uploads dir
 const UP = path.resolve('uploads')
 if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 
-// ✅ ensure CORS headers are set also for errors/preflights
-applyCors(app)
+// ---- CORS FIRST, and keep it for preflight + errors
+app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next() })
+app.use(cors(corsCfg))
+app.options('*', cors(corsCfg))
 
+// Security + basics
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
+
+// static uploads
 app.use('/uploads', express.static(UP))
+
+// soft attach user if token present (for public pages)
 app.use(optionalAuth)
 
+// Health
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
+// API
 app.use('/api/auth', authRoutes)
 app.use('/api/inventories', inventoryRoutes)
 app.use('/api/users', userRoutes)
@@ -46,13 +59,18 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 app.use('/api/upload', uploadRoutes)
 
+// 404
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
+
+// Errors — make sure CORS still applies
 app.use((err, _req, res, _next) => {
   console.error('[server error]', err)
-  res.setHeader('Vary','Origin') // reflect CORS vary
+  // reflect credentials-safe CORS headers even on error
+  res.setHeader('Vary','Origin')
   res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
 
+// --- Bootstrap admin + seed ----
 async function ensureDefaultAdmin() {
   const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com'
   const plain = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme'
@@ -61,11 +79,20 @@ async function ensureDefaultAdmin() {
 
   if (!existing) {
     await prisma.user.create({
-      data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false }
+      data: {
+        email: adminEmail,
+        name: 'Admin',
+        password: hash,
+        roles: ['ADMIN'],
+        blocked: false,
+      }
     })
     console.log(`[bootstrap] Created default admin ${adminEmail}`)
   } else if (!existing.roles?.includes('ADMIN')) {
-    await prisma.user.update({ where: { id: existing.id }, data: { roles: { set: ['ADMIN'] }, password: existing.password || hash } })
+    await prisma.user.update({
+      where: { id: existing.id },
+      data: { roles: { set: ['ADMIN'] }, password: existing.password || hash }
+    })
     console.log(`[bootstrap] Promoted ${adminEmail} to ADMIN`)
   }
 }
@@ -73,7 +100,11 @@ async function ensureDefaultAdmin() {
 async function seedCategories() {
   const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
   for (const name of names) {
-    await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
+    await prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name }
+    })
   }
   console.log('[seed] Categories ensured')
 }
@@ -84,3 +115,5 @@ const PORT = process.env.PORT || 5045
   await seedCategories()
   app.listen(PORT, () => console.log(`API listening on :${PORT}`))
 })()
+
+

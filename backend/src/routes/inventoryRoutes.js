@@ -7,6 +7,7 @@ import { generateCustomId } from '../utils/customId.js'
 const router = Router()
 router.use(optionalAuth)
 
+/* tiny helper */
 const setNoStore = (res) => res.set('Cache-Control', 'no-store, max-age=0')
 
 /* ---------------- LISTS ---------------- */
@@ -28,9 +29,7 @@ router.get('/public-recent', async (req, res) => {
     id: x.id,
     title: x.title,
     description: x.description?.slice(0, 140) || '',
-    // expose first non-null image for cards
-    imageUrl: x.img1 || x.imageUrl || null,
-    images: [x.img1, x.img2, x.img3].filter(Boolean),
+    imageUrl: x.imageUrl || null,
     categoryName: x.category?.name || '-',
     ownerName: x.owner?.name || '-',
     itemsCount: x._count.items
@@ -138,15 +137,14 @@ router.get('/:id', async (req, res) => {
 
   const pack = (type) => [1, 2, 3].map(slot => {
     const x = fields.find(f => f.type === type && f.slot === slot)
-    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable, required: !!x?.required }
+    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
   })
 
   const fieldsFlat = fields
     .map(f => ({
       group: f.type, slot: f.slot,
       title: f.title,
-      order: f.displayOrder ?? 0,
-      required: !!f.required
+      order: f.displayOrder ?? 0
     }))
     .sort((a,b)=> a.order - b.order || (a.group+b.slot).localeCompare(b.group+b.slot))
 
@@ -164,15 +162,12 @@ router.get('/:id', async (req, res) => {
   })
 
   const canEdit = !!(req.user?.id && (req.user.roles?.includes('ADMIN') || req.user.id === inv.ownerId))
-  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access))
+  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access)) // ✅ NEW
 
   res.json({
-    inventory: {
-      ...inv,
-      images: [inv.img1, inv.img2, inv.img3].filter(Boolean)
-    },
+    inventory: inv,
     canEdit,
-    canWrite,
+    canWrite, // ✅ NEW
     fields: {
       text: pack('TEXT'),
       mtext: pack('MTEXT'),
@@ -194,19 +189,13 @@ router.put('/:id', requireAuth, async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
 
-  const { version, title, description, publicWrite, categoryId, imageUrl, images } = req.body || {}
+  const { version, title, description, publicWrite, categoryId, imageUrl } = req.body || {}
   const v = Number.isFinite(+version) ? +version : inv.version
   const data = {
     title: typeof title === 'string' ? title : inv.title,
     description: typeof description === 'string' ? description : inv.description,
     publicWrite: !!publicWrite,
     imageUrl: typeof imageUrl === 'string' ? imageUrl : inv.imageUrl
-  }
-  if (Array.isArray(images)) {
-    const [a,b,c] = images.map(x => (typeof x === 'string' ? x : null)).slice(0,3)
-    data.img1 = a || null
-    data.img2 = b || null
-    data.img3 = c || null
   }
   if (categoryId) {
     const cat = await prisma.category.findUnique({ where: { id: Number(categoryId) } })
@@ -240,10 +229,10 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   const { fields = {}, order = [] } = req.body || {}
 
   const tx = []
-  const upsert = (type, slot, { title, desc, show, displayOrder, required }) => prisma.inventoryField.upsert({
+  const upsert = (type, slot, { title, desc, show, displayOrder }) => prisma.inventoryField.upsert({
     where: { inventoryId_type_slot: { inventoryId: inv.id, type, slot } },
-    update: { title, description: desc, showInTable: !!show, displayOrder: displayOrder ?? 0, required: !!required },
-    create: { inventoryId: inv.id, type, slot, title, description: desc, showInTable: !!show, displayOrder: displayOrder ?? 0, required: !!required }
+    update: { title, description: desc, showInTable: !!show, displayOrder: displayOrder ?? 0 },
+    create: { inventoryId: inv.id, type, slot, title, description: desc, showInTable: !!show, displayOrder: displayOrder ?? 0 }
   })
 
   const groups = ['text','mtext','num','link','bool','image']
@@ -343,14 +332,13 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
   const pack = (type) => [1, 2, 3].map(slot => {
     const x = fields.find(f => f.type === type && f.slot === slot)
-    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable, required: !!x?.required }
+    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
   })
   const fieldsFlat = fields
-    .map(f => ({ group: f.type, slot: f.slot, title: f.title, order: f.displayOrder ?? 0, required: !!f.required }))
+    .map(f => ({ group: f.type, slot: f.slot, title: f.title, order: f.displayOrder ?? 0 }))
     .sort((a,b)=> a.order - b.order || (a.group+b.slot).localeCompare(b.group+b.slot))
 
-  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access))
-  const canEdit  = !!(req.user?.id && (req.user.roles?.includes('ADMIN') || req.user.id === inv.ownerId))
+  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access)) // ✅ NEW
 
   res.json({
     item,
@@ -359,8 +347,7 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
       link: pack('LINK'), bool: pack('BOOL'), image: pack('IMAGE'),
     },
     fieldsFlat,
-    canWrite,
-    canEdit,
+    canWrite, // ✅ NEW
   })
 })
 
@@ -531,3 +518,4 @@ router.get('/:id/stats', async (req, res) => {
 })
 
 export default router
+
