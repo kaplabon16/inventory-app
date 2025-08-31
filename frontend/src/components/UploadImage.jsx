@@ -12,19 +12,14 @@ export default function UploadImage({
   const fileRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState("")
-  const [viewer, setViewer] = useState(false)
-
   const pick = () => fileRef.current?.click()
 
   const onFile = async (e) => {
     const f = e.target.files?.[0]
+    e.target.value = ""
     if (!f) return
     setErr("")
-    if (!inventoryId) {
-      setErr("Upload failed: missing inventoryId")
-      e.target.value = ""
-      return
-    }
+    if (!inventoryId) { setErr("Upload failed: missing inventoryId"); return }
     setLoading(true)
     try {
       const form = new FormData()
@@ -39,7 +34,6 @@ export default function UploadImage({
       setErr(e?.response?.data?.error || "Upload failed")
     } finally {
       setLoading(false)
-      e.target.value = ""
     }
   }
 
@@ -53,7 +47,6 @@ export default function UploadImage({
     <div className="grid gap-2">
       <div className="flex items-center gap-2">
         <span className="text-sm">{label}</span>
-
         {canWrite && (
           <>
             <button
@@ -65,7 +58,6 @@ export default function UploadImage({
             >
               {loading ? "Uploading…" : "Upload from device"}
             </button>
-
             <button
               type="button"
               onClick={pasteUrl}
@@ -76,51 +68,12 @@ export default function UploadImage({
           </>
         )}
       </div>
-
       {err && <div className="text-sm text-red-600">{err}</div>}
-
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={onFile}
-      />
-
+      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
       {value && (
-        <>
-          <div className="mt-1">
-            {/* thumbnail */}
-            <img
-              src={value}
-              alt=""
-              className="border rounded max-h-40 cursor-zoom-in"
-              onClick={() => setViewer(true)}
-            />
-          </div>
-
-          {/* full-screen viewer */}
-          {viewer && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
-              onClick={() => setViewer(false)}
-            >
-              <button
-                aria-label="Close"
-                className="absolute top-4 right-4 px-3 py-1.5 bg-white text-black rounded"
-                onClick={(e) => { e.stopPropagation(); setViewer(false) }}
-              >
-                ✕ Close
-              </button>
-              <img
-                src={value}
-                alt=""
-                className="max-h-[90vh] max-w-[95vw] rounded"
-                onClick={(e) => e.stopPropagation()}
-              />
-            </div>
-          )}
-        </>
+        <div className="mt-1">
+          <img src={value} alt="" className="border rounded max-h-40" />
+        </div>
       )}
     </div>
   )

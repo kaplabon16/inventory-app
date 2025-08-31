@@ -2,7 +2,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
-import UploadImage from '../components/UploadImage'
 import MultiImagePicker from '../components/MultiImagePicker'
 
 export default function ItemPage() {
@@ -34,7 +33,6 @@ export default function ItemPage() {
     setLikes(data.count)
   }
 
-  // Build ordered fields strictly by display order; collapse IMAGE slots into a single logical control at first image position
   const ordered = useMemo(() => {
     if (!fields || !fieldsFlat) return []
     const mapKey = (g) => {
@@ -42,57 +40,29 @@ export default function ItemPage() {
       if (k === 'number') return 'num'
       return k
     }
-    const visible = (fieldsFlat || [])
-      .map(f => ({ ...f, k: mapKey(f.group) }))
+    return (fieldsFlat || [])
       .filter(f => {
-        const arr = fields[f.k] || []
+        const key = mapKey(f.group)
+        const arr = fields[key] || []
         const cfg = arr[f.slot - 1]
         return !!cfg?.show
       })
-
-    // collapse images: find first IMAGE position
-    const imgs = visible.filter(v => v.k === 'image')
-    if (imgs.length === 0) return visible
-    const firstIdx = visible.findIndex(v => v.k === 'image')
-    const withoutImgs = visible.filter(v => v.k !== 'image')
-    // Insert a synthetic record
-    withoutImgs.splice(firstIdx, 0, { k:'image-all', slot: 0, title: 'Images' })
-    return withoutImgs
   }, [fields, fieldsFlat])
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
   const inputFor = (f) => {
-    if (f.k === 'image-all') {
-      const arr = [item.img1, item.img2, item.img3].filter(Boolean)
-      return (
-        <div className="grid gap-1">
-          <span className="font-medium">Images</span>
-          <MultiImagePicker
-            values={arr}
-            onChange={(next)=>{
-              const [a='',b='',c=''] = next
-              setItem({...item, img1:a, img2:b, img3:c})
-            }}
-            inventoryId={id}
-            canWrite={canWrite}
-            max={3}
-          />
-        </div>
-      )
-    }
-
-    const base = f.k // 'text'|'mtext'|'num'|'link'|'bool'|'image'
-    const key = (base === 'num' ? 'num'
+    const base = (f.group || '').toString().toLowerCase()
+    const key =
+      (base === 'number' ? 'num'
       : base === 'text' ? 'text'
       : base === 'mtext' ? 'mtext'
       : base === 'link' ? 'link'
-      : base === 'bool' ? 'bool'
-      : 'img') + f.slot
-    const label = fields[(base === 'num' ? 'num' : base)]?.[f.slot-1]?.title || `${f.k.toUpperCase()} ${f.slot}`
+      : base === 'bool' ? 'bool' : 'img') + f.slot
+    const label = fields[(base === 'number' ? 'num' : base)]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
 
-    switch (base) {
-      case 'text':
+    switch (f.group) {
+      case 'TEXT':
         return (
           <label className="grid gap-1">
             <span>{label}</span>
@@ -100,7 +70,7 @@ export default function ItemPage() {
               className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
-      case 'mtext':
+      case 'MTEXT':
         return (
           <label className="grid gap-1">
             <span>{label}</span>
@@ -108,15 +78,15 @@ export default function ItemPage() {
               className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
-      case 'num':
+      case 'NUMBER':
         return (
           <label className="grid gap-1">
             <span>{label}</span>
-            <input type="number" value={item[key]??''} onChange={e=>setItem({...item, [key]: e.target.value})}
+            <input type="number" value={item[key]??''} onChange={e=>setItem({...item, [key]: e.target.valueAsNumber})}
               className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
-      case 'link':
+      case 'LINK':
         return (
           <label className="grid gap-1">
             <span>{label}</span>
@@ -124,26 +94,33 @@ export default function ItemPage() {
               className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
-      case 'bool':
+      case 'BOOL':
         return (
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={!!item[key]} onChange={e=>setItem({...item, [key]: e.target.checked})} disabled={!canWrite}/>
             <span>{label}</span>
           </label>
         )
-      case 'image':
-        // Kept for backward compatibility (if you still want per-slot image controls here)
+      case 'IMAGE': {
+        // Use a multi picker bound to img1..img3
+        const imgs = [item.img1, item.img2, item.img3].filter(Boolean)
+        const setImgs = (arr=[]) => {
+          const [a,b,c] = arr
+          setItem({ ...item, img1: a || null, img2: b || null, img3: c || null })
+        }
         return (
           <div className="grid gap-1">
-            <UploadImage
+            <MultiImagePicker
               label={label}
-              value={item[`img${f.slot}`] || ''}
-              onChange={(u)=>setItem({...item, [`img${f.slot}`]: u})}
               inventoryId={id}
+              value={imgs}
+              onChange={setImgs}
               canWrite={canWrite}
+              max={3}
             />
           </div>
         )
+      }
       default: return null
     }
   }
@@ -151,17 +128,12 @@ export default function ItemPage() {
   return (
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
       <div className="flex items-center justify-between">
-        <div className="flex-1">
-          <label className="grid gap-1">
-            <span className="font-medium">ID</span>
-            <input className="w-full px-2 py-1 border rounded"
-              value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})} disabled={!canWrite}/>
-          </label>
-        </div>
+        <div><b>ID:</b> <input className="w-full px-2 py-1 border rounded"
+          value={item.customId || ''} onChange={e=>setItem({...item, customId: e.target.value})} disabled={!canWrite}/></div>
         <button onClick={toggleLike} className="px-2 py-1 ml-3 border rounded">👍 {likes}</button>
       </div>
 
-      {ordered.map((f,i)=><div key={`${f.k}-${f.slot}-${i}`}>{inputFor(f)}</div>)}
+      {ordered.map((f,i)=><div key={`${f.group}-${f.slot}-${i}`}>{inputFor(f)}</div>)}
 
       <div className="flex gap-2">
         <button onClick={save} className="px-3 py-1 border rounded" disabled={!canWrite}>Save</button>

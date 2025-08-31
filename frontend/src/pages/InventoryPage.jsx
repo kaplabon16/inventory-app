@@ -56,7 +56,6 @@ export default function InventoryPage() {
       const inv0 = data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1 }
       setInv({
         ...inv0,
-        // ⬇️ multi-images default
         image1: inv0.image1 || '',
         image2: inv0.image2 || '',
         image3: inv0.image3 || ''
@@ -66,7 +65,6 @@ export default function InventoryPage() {
 
       const grouped = data?.fields || { text:[], mtext:[], num:[], link:[], bool:[], image:[] }
       setFields(grouped)
-      // Build order from fieldsFlat if provided; else from grouped in given order
       const ord = Array.isArray(data?.fieldsFlat) && data.fieldsFlat.length
         ? data.fieldsFlat.map(x=>({ group: (String(x.group).toLowerCase()==='number'?'num':String(x.group).toLowerCase()), slot: x.slot }))
         : flattenFields(grouped).map(({group,slot})=>({group,slot}))
@@ -196,7 +194,7 @@ export default function InventoryPage() {
       <div className="mt-3">
         <MultiImagePicker
           label="Inventory images"
-          values={[inv.image1, inv.image2, inv.image3].filter(Boolean)}
+          value={[inv.image1, inv.image2, inv.image3].filter(Boolean)}  {/* NOTE: prop is `value` */}
           onChange={onImagesChange}
           inventoryId={id}
           canWrite={canWrite || canEdit}
@@ -262,7 +260,7 @@ export default function InventoryPage() {
 
       {tab==='customId' && (
         <div className="grid gap-3 mt-3">
-          <div><b>Preview:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview}</code></div>
+          <div><b>Preview:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{renderIdPreview(elements || [])}</code></div>
           <div className="text-sm text-gray-500">ID Elements</div>
           {[...(elements || [])].sort((a,b)=>a.order-b.order).map((el,idx)=>(
             <div key={idx} className="grid items-center gap-2 md:grid-cols-4">

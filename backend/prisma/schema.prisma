@@ -46,7 +46,7 @@ model Inventory {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // ⬇️ NEW: up to 3 images for inventory
+  // 🆕 up to 3 images
   image1      String?
   image2      String?
   image3      String?
@@ -72,7 +72,7 @@ model InventoryField {
   description  String?
   showInTable  Boolean   @default(false)
   displayOrder Int       @default(0)
-  required     Boolean   @default(false) // ⬅️ NEW
+  required     Boolean   @default(false) // 🆕
 
   @@unique([inventoryId, type, slot])
   @@index([displayOrder])
@@ -140,6 +140,7 @@ model Item {
   bool2  Boolean?
   bool3  Boolean?
 
+  // already had 3 images for items
   img1   String?
   img2   String?
   img3   String?
