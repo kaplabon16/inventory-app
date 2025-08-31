@@ -27,7 +27,7 @@ router.get('/public-recent', async (req, res) => {
     id: x.id,
     title: x.title,
     description: x.description?.slice(0, 140) || '',
-    // Multi-images not needed here, cards are text-only in your UI
+    // Cards are text-only in your UI
     categoryName: x.category?.name || '-',
     ownerName: x.owner?.name || '-',
     itemsCount: x._count.items
@@ -159,7 +159,7 @@ router.get('/:id', async (req, res) => {
   const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access))
 
   res.json({
-    inventory: inv,
+    inventory: inv, // includes image1/2/3 if present
     canEdit,
     canWrite,
     fields: {
@@ -185,7 +185,7 @@ router.put('/:id', requireAuth, async (req, res) => {
   const { version, title, description, publicWrite, categoryId } = req.body || {}
   const v = Number.isFinite(+version) ? +version : inv.version
 
-  // ⬇️ Multi-image support
+  // Multi-image support
   const image1 = typeof req.body?.image1 === 'string' ? req.body.image1 : inv.image1
   const image2 = typeof req.body?.image2 === 'string' ? req.body.image2 : inv.image2
   const image3 = typeof req.body?.image3 === 'string' ? req.body.image3 : inv.image3
@@ -215,6 +215,54 @@ router.delete('/:id', requireAuth, async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
   await prisma.inventory.delete({ where: { id: inv.id } })
+  res.json({ ok: true })
+})
+
+/* ---------- CUSTOM ID (ELEMENTS) ---------- */
+router.post('/:id/custom-id', requireAuth, async (req, res) => {
+  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
+
+  const elements = Array.isArray(req.body?.elements) ? req.body.elements : []
+  const allowedTypes = new Set(['FIXED','RAND20','RAND32','RAND6','RAND9','GUID','DATE','SEQ'])
+
+  const normalized = elements
+    .map((e, idx) => ({
+      order: Number.isFinite(+e.order) ? +e.order : (idx + 1),
+      type: String(e.type || '').toUpperCase(),
+      param: typeof e.param === 'string' ? e.param : null,
+    }))
+    .filter(e => allowedTypes.has(e.type))
+    .sort((a,b)=> a.order - b.order)
+
+  await prisma.$transaction(async (tx) => {
+    await tx.customIdElement.deleteMany({ where: { inventoryId: inv.id } })
+    if (normalized.length) {
+      await tx.customIdElement.createMany({
+        data: normalized.map(e => ({
+          inventoryId: inv.id,
+          order: e.order,
+          type: e.type,
+          param: e.param
+        }))
+      })
+    }
+
+    // Ensure sequence row exists if SEQ is used
+    const hasSeq = normalized.some(e => e.type === 'SEQ')
+    if (hasSeq) {
+      await tx.sequence.upsert({
+        where: { inventoryId: inv.id },
+        update: {},
+        create: { inventoryId: inv.id, value: 0 }
+      })
+    } else {
+      // Optional: remove sequence if not used
+      await tx.sequence.deleteMany({ where: { inventoryId: inv.id } })
+    }
+  })
+
   res.json({ ok: true })
 })
 
@@ -314,7 +362,7 @@ router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-  // ⬇️ Sanitize fields to avoid 500s → 502 (which looked like CORS)
+  // sanitize
   const allow = new Set([
     'customId',
     'text1','text2','text3',
@@ -331,7 +379,6 @@ router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
     if (!allow.has(k)) continue
     let v = body[k]
     if (k.startsWith('num')) {
-      // JSON NaN → null; also coerce '' → null
       v = (v === '' || v === null || Number.isNaN(Number(v))) ? null : Number(v)
     }
     if (k.startsWith('bool')) {
@@ -339,7 +386,6 @@ router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
     }
     data[k] = v
   }
-  // Allow customId override but keep unique constraint
   if (!data.customId) delete data.customId
 
   const updated = await prisma.item.update({ where: { id: req.params.itemId }, data })
@@ -383,7 +429,8 @@ router.get('/:id/comments', async (req, res) => {
     include: { user: true },
     orderBy: { createdAt: 'asc' }, take: 100
   })
-  res.json(list.map(c => ({ id: c.id, userName: c.user.name, body: c.body })))
+  res.json(list.map(c => ({ id: c.id, userName: c.user.name, body: c.body }))
+  )
 })
 
 router.post('/:id/comments', requireAuth, async (req, res) => {
