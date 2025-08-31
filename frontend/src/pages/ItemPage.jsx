@@ -1,8 +1,7 @@
-// frontend/src/pages/ItemPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
-import MultiImagePicker from '../components/MultiImagePicker'
+import UploadImage from '../components/UploadImage'
 
 export default function ItemPage() {
   const { id, itemId } = useParams()
@@ -10,7 +9,7 @@ export default function ItemPage() {
   const [fields,setFields] = useState(null)
   const [fieldsFlat, setFieldsFlat] = useState([])
   const [likes,setLikes] = useState(0)
-  const [canWrite, setCanWrite] = useState(false)
+  const [canWrite, setCanWrite] = useState(false) // ✅ NEW
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
@@ -18,7 +17,7 @@ export default function ItemPage() {
     setFields(data.fields)
     setFieldsFlat(data.fieldsFlat || [])
     setLikes(data.item?._count?.likes ?? 0)
-    setCanWrite(!!data.canWrite)
+    setCanWrite(!!data.canWrite) // ✅ from API
   }
   useEffect(()=>{ load() },[id,itemId])
 
@@ -33,11 +32,12 @@ export default function ItemPage() {
     setLikes(data.count)
   }
 
+  // ✅ Hooks MUST NOT be called conditionally — compute ordered safely here
   const ordered = useMemo(() => {
     if (!fields || !fieldsFlat) return []
     const mapKey = (g) => {
       const k = (g || '').toString().toLowerCase()
-      if (k === 'number') return 'num'
+      if (k === 'number') return 'num' // backend 'NUMBER' -> 'num'
       return k
     }
     return (fieldsFlat || [])
@@ -101,26 +101,18 @@ export default function ItemPage() {
             <span>{label}</span>
           </label>
         )
-      case 'IMAGE': {
-        // Use a multi picker bound to img1..img3
-        const imgs = [item.img1, item.img2, item.img3].filter(Boolean)
-        const setImgs = (arr=[]) => {
-          const [a,b,c] = arr
-          setItem({ ...item, img1: a || null, img2: b || null, img3: c || null })
-        }
+      case 'IMAGE':
         return (
           <div className="grid gap-1">
-            <MultiImagePicker
+            <UploadImage
               label={label}
+              value={item[`img${f.slot}`] || ''}
+              onChange={(u)=>setItem({...item, [`img${f.slot}`]: u})}
               inventoryId={id}
-              value={imgs}
-              onChange={setImgs}
-              canWrite={canWrite}
-              max={3}
+              canWrite={canWrite} // ✅ hide controls if cannot write
             />
           </div>
         )
-      }
       default: return null
     }
   }
@@ -143,3 +135,4 @@ export default function ItemPage() {
     </div>
   )
 }
+

@@ -1,4 +1,4 @@
-// backend/src/index.js
+
 import 'dotenv/config'
 import express from 'express'
 import cookieParser from 'cookie-parser'
@@ -24,13 +24,14 @@ import uploadRoutes from './routes/uploadRoutes.js'
 const prisma = new PrismaClient()
 const app = express()
 
+// trust proxy for Railway so secure cookies work
 app.set('trust proxy', 1)
 
 // ensure uploads dir
 const UP = path.resolve('uploads')
 if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 
-// --- CORS (must be first) ---
+// ---- CORS FIRST, and keep it for preflight + errors
 app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next() })
 app.use(cors(corsCfg))
 app.options('*', cors(corsCfg))
@@ -59,20 +60,15 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 app.use('/api/upload', uploadRoutes)
 
-// 404 — ensure CORS headers on errors too
-app.use((req, res, next) => {
-  cors(corsCfg)(req, res, () => {
-    res.status(404).json({ error: 'Not found', path: req.originalUrl })
-  })
-})
+// 404
+app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
 
-// Errors — ensure CORS on error responses
-app.use((err, req, res, _next) => {
+// Errors — make sure CORS still applies
+app.use((err, _req, res, _next) => {
   console.error('[server error]', err)
+  // reflect credentials-safe CORS headers even on error
   res.setHeader('Vary','Origin')
-  cors(corsCfg)(req, res, () => {
-    res.status(err.status || 500).json({ error: err.message || 'Server error' })
-  })
+  res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
 
 // --- Bootstrap admin + seed ----
@@ -84,7 +80,13 @@ async function ensureDefaultAdmin() {
 
   if (!existing) {
     await prisma.user.create({
-      data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false }
+      data: {
+        email: adminEmail,
+        name: 'Admin',
+        password: hash,
+        roles: ['ADMIN'],
+        blocked: false,
+      }
     })
     console.log(`[bootstrap] Created default admin ${adminEmail}`)
   } else if (!existing.roles?.includes('ADMIN')) {
@@ -99,7 +101,11 @@ async function ensureDefaultAdmin() {
 async function seedCategories() {
   const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
   for (const name of names) {
-    await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
+    await prisma.category.upsert({
+      where: { name },
+      update: {},
+      create: { name }
+    })
   }
   console.log('[seed] Categories ensured')
 }

@@ -1,4 +1,3 @@
-// frontend/src/components/UploadImage.jsx
 import { useRef, useState } from "react"
 import api from "../api/client"
 
@@ -7,19 +6,23 @@ export default function UploadImage({
   onChange,
   label = "Image",
   inventoryId = "",
-  canWrite = false,
+  canWrite = false, // ✅ NEW: control visibility of upload actions
 }) {
   const fileRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState("")
+
   const pick = () => fileRef.current?.click()
 
   const onFile = async (e) => {
     const f = e.target.files?.[0]
-    e.target.value = ""
     if (!f) return
     setErr("")
-    if (!inventoryId) { setErr("Upload failed: missing inventoryId"); return }
+    if (!inventoryId) {
+      setErr("Upload failed: missing inventoryId")
+      e.target.value = ""
+      return
+    }
     setLoading(true)
     try {
       const form = new FormData()
@@ -34,6 +37,7 @@ export default function UploadImage({
       setErr(e?.response?.data?.error || "Upload failed")
     } finally {
       setLoading(false)
+      e.target.value = ""
     }
   }
 
@@ -47,6 +51,8 @@ export default function UploadImage({
     <div className="grid gap-2">
       <div className="flex items-center gap-2">
         <span className="text-sm">{label}</span>
+
+        {/* ✅ Hide upload controls unless user can write */}
         {canWrite && (
           <>
             <button
@@ -58,6 +64,7 @@ export default function UploadImage({
             >
               {loading ? "Uploading…" : "Upload from device"}
             </button>
+
             <button
               type="button"
               onClick={pasteUrl}
@@ -67,9 +74,29 @@ export default function UploadImage({
             </button>
           </>
         )}
+
+        {value && (
+          <a
+            href={value}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm text-blue-600"
+          >
+            open
+          </a>
+        )}
       </div>
+
       {err && <div className="text-sm text-red-600">{err}</div>}
-      <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onFile}
+      />
+
       {value && (
         <div className="mt-1">
           <img src={value} alt="" className="border rounded max-h-40" />

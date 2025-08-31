@@ -7,3 +7,4 @@ export function requireAdmin(req, _res, next) {
   }
   next();
 }
+
