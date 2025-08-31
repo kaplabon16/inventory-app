@@ -4,11 +4,12 @@ import fs from 'fs'
 import path from 'path'
 import { requireAuth } from '../middleware/auth.js'
 import { prisma } from '../services/prisma.js'
-import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
+import { isOwnerOrAdmin } from '../utils/validators.js'
 import { v2 as cloudinary } from 'cloudinary'
 
 const router = Router()
 
+// Cloudinary config if present
 const hasCloud = !!process.env.CLOUDINARY_URL || (
   process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
 )
@@ -39,18 +40,9 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
     const inventoryId = (req.query.inventoryId || req.body.inventoryId || '').toString().trim()
     if (!inventoryId) return res.status(400).json({ error: 'Missing inventoryId' })
 
-    const [inv, access] = await Promise.all([
-      prisma.inventory.findUnique({ where: { id: inventoryId } }),
-      prisma.inventoryAccess.findMany({ where: { inventoryId } }),
-    ])
+    const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
     if (!inv) return res.status(404).json({ error: 'Inventory not found' })
-
-    // ✅ allow anyone with write permission (owner/admin/public-write/access list)
-    if (!canWriteInventory(req.user, inv, access)) {
-      return res.status(403).json({ error: 'Forbidden' })
-    }
-
-    if (!req.file) return res.status(400).json({ error: 'No file' })
+    if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Owner/Admin only' })
 
     if (hasCloud) {
       const stream = cloudinary.uploader.upload_stream(
@@ -67,7 +59,7 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       return
     }
 
-    // fallback: local FS
+    // Fallback: local FS
     const ts = Date.now()
     const safe = (req.file.originalname || 'file').replace(/[^a-z0-9_.-]/gi, '_')
     const filename = `${ts}_${safe}`
@@ -84,3 +76,5 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
 })
 
 export default router
+
+

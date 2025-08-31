@@ -36,9 +36,6 @@ CREATE TABLE "Inventory" (
     "description" TEXT NOT NULL DEFAULT '',
     "categoryId" INTEGER NOT NULL,
     "imageUrl" TEXT,
-    "img1" TEXT,
-    "img2" TEXT,
-    "img3" TEXT,
     "publicWrite" BOOLEAN NOT NULL DEFAULT false,
     "version" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -57,7 +54,6 @@ CREATE TABLE "InventoryField" (
     "description" TEXT,
     "showInTable" BOOLEAN NOT NULL DEFAULT false,
     "displayOrder" INTEGER NOT NULL DEFAULT 0,
-    "required" BOOLEAN NOT NULL DEFAULT false,
 
     CONSTRAINT "InventoryField_pkey" PRIMARY KEY ("id")
 );
