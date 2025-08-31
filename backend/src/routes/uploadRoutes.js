@@ -1,10 +1,11 @@
+// backend/src/routes/uploadRoutes.js
 import { Router } from 'express'
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
 import { requireAuth } from '../middleware/auth.js'
 import { prisma } from '../services/prisma.js'
-import { isOwnerOrAdmin } from '../utils/validators.js'
+import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
 import { v2 as cloudinary } from 'cloudinary'
 
 const router = Router()
@@ -42,7 +43,12 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
 
     const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
     if (!inv) return res.status(404).json({ error: 'Inventory not found' })
-    if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Owner/Admin only' })
+
+    // ⬇️ Allow owners/admins OR any user with write access (covers public-write)
+    const acl = await prisma.inventoryAccess.findMany({ where: { inventoryId } })
+    if (!isOwnerOrAdmin(req.user, inv) && !canWriteInventory(req.user, inv, acl)) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
 
     if (hasCloud) {
       const stream = cloudinary.uploader.upload_stream(
@@ -76,5 +82,3 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
 })
 
 export default router
-
-
