@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import MarkdownBox from '../components/MarkdownBox'
@@ -29,7 +29,7 @@ export default function InventoryPage() {
   const [canWrite, setCanWrite] = useState(false)
   const [tab, setTab] = useState('items')
   const [fields,setFields] = useState(makeEmpty())
-  const [dragList,setDragList] = useState([]) // flat list for DnD
+  const [dragList,setDragList] = useState([]) // flat list for DnD editor
   const [elements,setElements] = useState(defaultElements)
   const [items,setItems] = useState([])
   const [sel,setSel] = useState([])
@@ -49,17 +49,28 @@ export default function InventoryPage() {
       const { data } = await api.get(`/api/inventories/${id}`)
       const baseInv = data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1 }
       setInv(baseInv)
-      setInvImages([baseInv.image1, baseInv.image2, baseInv.image3].filter(Boolean))
+
+      // prefer new `images` (arr) fallback to legacy image1/2/3/img1/2/3
+      const imgs = Array.isArray(baseInv.images)
+        ? baseInv.images
+        : [baseInv.img1, baseInv.img2, baseInv.img3, baseInv.image1, baseInv.image2, baseInv.image3].filter(Boolean)
+      setInvImages(imgs.slice(0, 3))
+
       setCanEdit(!!data?.canEdit)
       setCanWrite(!!data?.canWrite)
       setFields(data?.fields || makeEmpty())
       setElements(data?.elements || defaultElements)
       setVersion(data?.inventory?.version || 1)
       setItems(Array.isArray(data?.items) ? data.items : [])
+
       // build flat drag list from fieldsFlat returned order
       const flat = (data.fieldsFlat || []).map(f => ({
-        id:`${f.group}-${f.slot}`, group: mapGroup(f.group), slot: f.slot,
-        title:f.title || `${f.group} ${f.slot}`, required: !!f.required, show:true
+        id:`${f.group}-${f.slot}`,
+        group: mapGroup(f.group),
+        slot: f.slot,
+        title: f.title || `${f.group} ${f.slot}`,
+        required: !!f.required,
+        show: true
       }))
       setDragList(flat)
     } catch (e) {
@@ -96,11 +107,17 @@ export default function InventoryPage() {
         ...inv,
         version,
         categoryId: inv.categoryId,
-        images: invImages
+        // persist ordered images
+        images: (invImages || []).slice(0,3)
       })
       setVersion(data.version)
       setInv(data)
-      setInvImages([data.image1, data.image2, data.image3].filter(Boolean))
+
+      const imgs = Array.isArray(data?.images)
+        ? data.images
+        : [data?.img1, data?.img2, data?.img3, data?.image1, data?.image2, data?.image3].filter(Boolean)
+      setInvImages((imgs || []).slice(0,3))
+
       toast('Saved settings')
     } catch (e) {
       if (e?.response?.status === 409) toast('Version conflict — reload and try again')
@@ -128,7 +145,7 @@ export default function InventoryPage() {
     } catch { toast('Delete failed for one or more items') }
   }
 
-  // ----- Custom Fields DnD -----
+  // ----- Custom Fields DnD (editor list) -----
   const [dragIdx, setDragIdx] = useState(-1)
   const onDragStart = (i) => setDragIdx(i)
   const onDragOver = (e, i) => { e.preventDefault(); if (i===dragIdx) return }
@@ -157,8 +174,12 @@ export default function InventoryPage() {
   const saveFields = async () => {
     // rebuild grouped "fields" payload + "order"
     const fieldsPayload = makeFieldsFromFlat(dragList, fields)
-    const order = dragList.map(x => ({ group: mapType(x.group), slot: x.slot }))
-    await api.post(`/api/inventories/${id}/fields`, { fields: fieldsPayload, order })
+    // prefer explicit order from DraggableOrder if present
+    const explicitOrder = Array.isArray(fields.__order) && fields.__order.length
+      ? fields.__order
+      : dragList.map(x => ({ group: mapType(x.group), slot: x.slot }))
+
+    await api.post(`/api/inventories/${id}/fields`, { fields: fieldsPayload, order: explicitOrder })
     await load()
     toast('Saved field config')
   }
@@ -206,6 +227,7 @@ export default function InventoryPage() {
             inventoryId={id}
             canWrite={canEdit}
             scope="inventory"
+            max={3}
           />
         )}
       </div>
@@ -312,7 +334,34 @@ export default function InventoryPage() {
 
       {tab==='fields' && (
         <div className="grid gap-4 mt-4">
-          {/* Add field */}
+          {/* ---- New: flat order box that drives Add Item order ---- */}
+          <div className="p-3 border rounded">
+            <div className="mb-2 font-medium">Order (drag to reorder)</div>
+            <DraggableOrder
+              fields={fields}
+              onChange={(orderArray)=> {
+                // store ephemeral order array on state so saveFields can send it
+                setFields(prev => ({ ...prev, __order: orderArray }))
+              }}
+            />
+            {canEdit && (
+              <div className="mt-2">
+                <button
+                  className="px-3 py-1 text-sm border rounded"
+                  onClick={async()=>{
+                    await api.post(`/api/inventories/${id}/fields`, {
+                      fields,
+                      order: (fields.__order || [])
+                    })
+                    await load()
+                    toast('Saved field order')
+                  }}
+                >Save order</button>
+              </div>
+            )}
+          </div>
+
+          {/* Add/remove fields (editor) */}
           {canEdit && (
             <div className="flex flex-wrap gap-2">
               {TYPES.map(t => (
@@ -323,7 +372,7 @@ export default function InventoryPage() {
             </div>
           )}
 
-          {/* DnD list */}
+          {/* DnD list (labels/show/required) */}
           <div className="border rounded">
             {dragList.length === 0 && <div className="p-4 text-center text-gray-500">No fields</div>}
             {dragList.map((r, i) => (
@@ -333,7 +382,7 @@ export default function InventoryPage() {
                    onDragOver={(e)=>onDragOver(e,i)}
                    onDrop={()=>onDrop(i)}
                    className="grid items-center gap-2 px-3 py-2 border-b md:grid-cols-6">
-                <div className="text-gray-500 cursor-grab">↕</div>
+                <div className="text-gray-500 cursor-grab" title="Drag to reorder">↕</div>
                 <div className="text-sm">{typeNames[r.group]} {r.slot}</div>
                 <input
                   disabled={!canEdit}
@@ -379,6 +428,62 @@ export default function InventoryPage() {
       )}
     </div>
   )
+}
+
+/* ---------- inline DraggableOrder (no separate file) ---------- */
+function DraggableOrder({ fields, onChange }) {
+  const [list, setList] = useState(() => flattenFields(fields))
+  const [dragIdx, setDragIdx] = useState(-1)
+
+  useEffect(() => { setList(flattenFields(fields)) }, [fields])
+
+  const start = (i)=>()=>setDragIdx(i)
+  const over = (i)=>e=>{
+    e.preventDefault()
+    if (dragIdx === -1 || dragIdx === i) return
+    const arr = [...list]
+    const [m] = arr.splice(dragIdx, 1)
+    arr.splice(i, 0, m)
+    setDragIdx(i)
+    onChange?.(arr.map(x=>({ group: x.group, slot: x.slot })))
+  }
+  const end = ()=> setDragIdx(-1)
+
+  return (
+    <div className="grid gap-2">
+      {list.map((x,i)=>(
+        <div key={`${x.group}-${x.slot}`}
+             draggable
+             onDragStart={start(i)}
+             onDragOver={over(i)}
+             onDragEnd={end}
+             className="flex items-center gap-3 p-2 bg-white border rounded dark:bg-gray-900"
+             title="Drag to reorder">
+          <span className="cursor-move">↕</span>
+          <code className="px-2 py-0.5 bg-gray-100 dark:bg-gray-800 rounded">{x.group}-{x.slot}</code>
+          <span className="text-sm">{x.title}</span>
+        </div>
+      ))}
+      {list.length === 0 && <div className="text-sm text-gray-500">No fields configured yet</div>}
+    </div>
+  )
+}
+
+function flattenFields(fields) {
+  const flat = []
+  ;[
+    ['TEXT','text'], ['MTEXT','mtext'], ['NUMBER','num'],
+    ['LINK','link'], ['BOOL','bool'], ['IMAGE','image']
+  ].forEach(([typeKey, stateKey]) => {
+    (fields?.[stateKey] || []).forEach((cfg, idx) => {
+      flat.push({
+        group: typeKey,
+        slot: idx+1,
+        title: cfg?.title || `${stateKey.toUpperCase()} ${idx+1}`
+      })
+    })
+  })
+  return flat
 }
 
 /* ---------- helpers ---------- */
