@@ -194,7 +194,7 @@ export default function InventoryPage() {
       <div className="mt-3">
         <MultiImagePicker
           label="Inventory images"
-          value={[inv.image1, inv.image2, inv.image3].filter(Boolean)}  {/* NOTE: prop is `value` */}
+          value={[inv.image1, inv.image2, inv.image3].filter(Boolean)}
           onChange={onImagesChange}
           inventoryId={id}
           canWrite={canWrite || canEdit}
