@@ -1,3 +1,4 @@
+// backend/src/routes/inventoryRoutes.js
 import { Router } from 'express'
 import { prisma } from '../services/prisma.js'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
@@ -7,12 +8,12 @@ import { generateCustomId } from '../utils/customId.js'
 const router = Router()
 router.use(optionalAuth)
 
-/* tiny helper */
 const setNoStore = (res) => res.set('Cache-Control', 'no-store, max-age=0')
 
-/* ---------------- LISTS ---------------- */
+/* --------------------------------
+ * LISTS
+ * -------------------------------- */
 
-// Recent public inventories for home cards
 router.get('/public-recent', async (req, res) => {
   setNoStore(res)
   const take = Math.min(Number(req.query.take || 10), 50)
@@ -36,7 +37,6 @@ router.get('/public-recent', async (req, res) => {
   })))
 })
 
-// Popular by number of items
 router.get('/popular', async (req, res) => {
   setNoStore(res)
   const take = Math.min(Number(req.query.take || 5), 50)
@@ -56,7 +56,6 @@ router.get('/popular', async (req, res) => {
   })))
 })
 
-// Listing (supports mine=1 and canWrite=1)
 router.get('/', optionalAuth, async (req, res) => {
   setNoStore(res)
   const mine = req.query.mine === '1'
@@ -103,7 +102,9 @@ router.get('/', optionalAuth, async (req, res) => {
   })))
 })
 
-/* ---------------- CREATE ---------------- */
+/* --------------------------------
+ * CREATE
+ * -------------------------------- */
 
 router.post('/', requireAuth, async (req, res) => {
   const { title, description, categoryId } = req.body || {}
@@ -120,7 +121,9 @@ router.post('/', requireAuth, async (req, res) => {
   res.json(inv)
 })
 
-/* ---------------- READ ONE (PUBLIC) ---------------- */
+/* --------------------------------
+ * READ ONE (PUBLIC)
+ * -------------------------------- */
 
 router.get('/:id', async (req, res) => {
   const inv = await prisma.inventory.findUnique({
@@ -130,59 +133,64 @@ router.get('/:id', async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
 
   const [fields, elems, access] = await Promise.all([
-    prisma.inventoryField.findMany({ where: { inventoryId: inv.id } }),
+    prisma.inventoryField.findMany({
+      where: { inventoryId: inv.id },
+      orderBy: [{ displayOrder: 'asc' }, { type: 'asc' }, { slot: 'asc' }]
+    }),
     prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } }),
     prisma.inventoryAccess.findMany({ where: { inventoryId: inv.id } }),
   ])
 
-  const pack = (type) => [1, 2, 3].map(slot => {
-    const x = fields.find(f => f.type === type && f.slot === slot)
-    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
-  })
+  // Flattened list used for ordering everywhere
+  const fieldsFlat = fields.map(f => ({
+    group: f.type,       // 'TEXT' | 'MTEXT' | ...
+    slot: f.slot,        // 1..3 within group
+    title: f.title,
+    order: f.displayOrder ?? 0
+  }))
 
-  const fieldsFlat = fields
-    .map(f => ({
-      group: f.type, slot: f.slot,
-      title: f.title,
-      order: f.displayOrder ?? 0
-    }))
-    .sort((a,b)=> a.order - b.order || (a.group+b.slot).localeCompare(b.group+b.slot))
-
-  const items = await prisma.item.findMany({
-    where: { inventoryId: inv.id },
-    orderBy: { createdAt: 'desc' }, take: 100,
-    select: {
-      id: true, customId: true, createdAt: true, updatedAt: true,
-      createdById: true,
-      text1: true, text2: true, text3: true,
-      num1: true, num2: true, num3: true,
-      bool1: true, bool2: true, bool3: true,
-      img1: true, img2: true, img3: true,
-    }
-  })
+  // Grouped lists (ONLY existing fields; no fake empty rows)
+  const grouped = { TEXT: [], MTEXT: [], NUMBER: [], LINK: [], BOOL: [], IMAGE: [] }
+  for (const f of fields) {
+    grouped[f.type].push({ title: f.title, desc: f.description || '', show: !!f.showInTable })
+  }
 
   const canEdit = !!(req.user?.id && (req.user.roles?.includes('ADMIN') || req.user.id === inv.ownerId))
-  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access)) // ✅ NEW
+  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access))
 
   res.json({
     inventory: inv,
     canEdit,
-    canWrite, // ✅ NEW
+    canWrite,
     fields: {
-      text: pack('TEXT'),
-      mtext: pack('MTEXT'),
-      num: pack('NUMBER'),
-      link: pack('LINK'),
-      bool: pack('BOOL'),
-      image: pack('IMAGE'),
+      text:  grouped.TEXT,
+      mtext: grouped.MTEXT,
+      num:   grouped.NUMBER,
+      link:  grouped.LINK,
+      bool:  grouped.BOOL,
+      image: grouped.IMAGE,
     },
     fieldsFlat,
     elements: elems,
-    items
+    items: await prisma.item.findMany({
+      where: { inventoryId: inv.id },
+      orderBy: { createdAt: 'desc' }, take: 100,
+      select: {
+        id: true, customId: true, createdAt: true, updatedAt: true, createdById: true,
+        text1: true, text2: true, text3: true,
+        mtext1: true, mtext2: true, mtext3: true,
+        num1: true, num2: true, num3: true,
+        link1: true, link2: true, link3: true,
+        bool1: true, bool2: true, bool3: true,
+        img1: true, img2: true, img3: true
+      }
+    })
   })
 })
 
-/* ---------------- UPDATE / DELETE INVENTORY ---------------- */
+/* --------------------------------
+ * UPDATE / DELETE INVENTORY
+ * -------------------------------- */
 
 router.put('/:id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -219,48 +227,76 @@ router.delete('/:id', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---------------- FIELDS ---------------- */
+/* --------------------------------
+ * FIELDS (create/update/reorder)
+ * -------------------------------- */
 
 router.post('/:id/fields', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
 
+  // expects: { fields: {text:[], mtext:[], num:[], link:[], bool:[], image:[]}, order: [{group:'TEXT',slot:1}, ...] }
   const { fields = {}, order = [] } = req.body || {}
 
-  const tx = []
-  const upsert = (type, slot, { title, desc, show, displayOrder }) => prisma.inventoryField.upsert({
-    where: { inventoryId_type_slot: { inventoryId: inv.id, type, slot } },
-    update: { title, description: desc, showInTable: !!show, displayOrder: displayOrder ?? 0 },
-    create: { inventoryId: inv.id, type, slot, title, description: desc, showInTable: !!show, displayOrder: displayOrder ?? 0 }
-  })
-
-  const groups = ['text','mtext','num','link','bool','image']
   const typeMap = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL', image: 'IMAGE' }
 
-  const orderMap = {}
-  order.forEach((x, idx) => {
-    orderMap[`${x.group}-${x.slot}`] = idx
+  const tx = []
+
+  // persist grouped fields with slots = index+1
+  for (const groupKey of Object.keys(typeMap)) {
+    const type = typeMap[groupKey]
+    const arr = Array.isArray(fields[groupKey]) ? fields[groupKey].slice(0, 3) : []
+    // upsert the ones we have
+    arr.forEach((cfg, i) => {
+      tx.push(prisma.inventoryField.upsert({
+        where: { inventoryId_type_slot: { inventoryId: inv.id, type, slot: i + 1 } },
+        update: {
+          title: cfg.title || '',
+          description: cfg.desc || '',
+          showInTable: !!cfg.show
+        },
+        create: {
+          inventoryId: inv.id, type, slot: i + 1,
+          title: cfg.title || '', description: cfg.desc || '', showInTable: !!cfg.show
+        }
+      }))
+    })
+    // delete the rest (guarantees removed ones stay removed)
+    tx.push(prisma.inventoryField.deleteMany({
+      where: { inventoryId: inv.id, type, slot: { gt: arr.length } }
+    }))
+  }
+
+  // apply cross-group displayOrder using `order` array
+  const orderMap = new Map()
+  order.forEach((o, idx) => {
+    const k = `${String(o.group).toUpperCase()}-${Number(o.slot)}`
+    orderMap.set(k, idx)
   })
 
-  groups.forEach(group => {
-    const type = typeMap[group]
-    const arr = fields[group] || []
-    arr.slice(0,3).forEach((cfg, idx) => {
-      const key = `${type}-${idx+1}`
-      const displayOrder = orderMap[key] ?? 9999
-      tx.push(upsert(type, idx + 1, { ...cfg, displayOrder }))
-    })
-    for (let s = arr.length + 1; s <= 3; s++) {
-      tx.push(prisma.inventoryField.deleteMany({ where: { inventoryId: inv.id, type, slot: s } }))
-    }
-  })
+  tx.push(prisma.inventoryField.updateMany({
+    where: { inventoryId: inv.id },
+    data: { displayOrder: 9999 }
+  }))
+
+  // set explicit order for the ones present
+  for (const [k, idx] of orderMap.entries()) {
+    const [group, slotStr] = k.split('-')
+    const slot = Number(slotStr)
+    tx.push(prisma.inventoryField.updateMany({
+      where: { inventoryId: inv.id, type: group, slot },
+      data: { displayOrder: idx }
+    }))
+  }
 
   await prisma.$transaction(tx)
   res.json({ ok: true, message: 'Saved field config' })
 })
 
-/* ---------------- CUSTOM ID ELEMENTS ---------------- */
+/* --------------------------------
+ * CUSTOM ID
+ * -------------------------------- */
 
 router.post('/:id/custom-id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -288,7 +324,9 @@ router.post('/:id/custom-id', requireAuth, async (req, res) => {
   res.json({ ok: true, elements: saved })
 })
 
-/* ---------------- ITEMS ---------------- */
+/* --------------------------------
+ * ITEMS
+ * -------------------------------- */
 
 async function getInvWithAccess(id) {
   const [inv, access] = await Promise.all([
@@ -329,25 +367,26 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   })
   if (!item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Item not found' })
 
-  const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
-  const pack = (type) => [1, 2, 3].map(slot => {
-    const x = fields.find(f => f.type === type && f.slot === slot)
-    return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
+  const fields = await prisma.inventoryField.findMany({
+    where: { inventoryId: inv.id },
+    orderBy: [{ displayOrder: 'asc' }, { type: 'asc' }, { slot: 'asc' }]
   })
-  const fieldsFlat = fields
-    .map(f => ({ group: f.type, slot: f.slot, title: f.title, order: f.displayOrder ?? 0 }))
-    .sort((a,b)=> a.order - b.order || (a.group+b.slot).localeCompare(b.group+b.slot))
 
-  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access)) // ✅ NEW
+  const grouped = { TEXT: [], MTEXT: [], NUMBER: [], LINK: [], BOOL: [], IMAGE: [] }
+  fields.forEach(f => grouped[f.type].push({ title: f.title, desc: f.description || '', show: !!f.showInTable }))
+
+  const fieldsFlat = fields.map(f => ({ group: f.type, slot: f.slot, title: f.title, order: f.displayOrder ?? 0 }))
+
+  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access))
 
   res.json({
     item,
     fields: {
-      text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'),
-      link: pack('LINK'), bool: pack('BOOL'), image: pack('IMAGE'),
+      text:  grouped.TEXT, mtext: grouped.MTEXT, num: grouped.NUMBER,
+      link:  grouped.LINK,  bool:  grouped.BOOL,   image: grouped.IMAGE,
     },
     fieldsFlat,
-    canWrite, // ✅ NEW
+    canWrite,
   })
 })
 
@@ -356,8 +395,28 @@ router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-  const data = (({ customId, ...rest }) => ({ ...rest, customId: customId || undefined }))(req.body || {})
-  const updated = await prisma.item.update({ where: { id: req.params.itemId }, data })
+  // Drop unknown keys to protect schema; accept customId edits
+  const allowed = new Set([
+    'customId',
+    'text1','text2','text3',
+    'mtext1','mtext2','mtext3',
+    'num1','num2','num3',
+    'link1','link2','link3',
+    'bool1','bool2','bool3',
+    'img1','img2','img3'
+  ])
+  const clean = {}
+  for (const [k, v] of Object.entries(req.body || {})) {
+    if (!allowed.has(k)) continue
+    if (k.startsWith('num')) {
+      const n = Number(v)
+      clean[k] = Number.isFinite(n) ? n : null   // prevent NaN save errors
+    } else {
+      clean[k] = v
+    }
+  }
+
+  const updated = await prisma.item.update({ where: { id: req.params.itemId }, data: clean })
   res.json(updated)
 })
 
@@ -370,28 +429,9 @@ router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---- LIKE / UNLIKE ---- */
-router.post('/:id/items/:itemId/like', requireAuth, async (req, res) => {
-  const { inv } = await getInvWithAccess(req.params.id)
-  if (!inv) return res.status(404).json({ error: 'Not found' })
-
-  const item = await prisma.item.findUnique({ where: { id: req.params.itemId } })
-  if (!item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Item not found' })
-
-  const key = { itemId_userId: { itemId: item.id, userId: req.user.id } }
-  const existing = await prisma.like.findUnique({ where: key }).catch(() => null)
-
-  if (existing) {
-    await prisma.like.delete({ where: key })
-  } else {
-    await prisma.like.create({ data: { itemId: item.id, userId: req.user.id } })
-  }
-
-  const count = await prisma.like.count({ where: { itemId: item.id } })
-  res.json({ ok: true, liked: !existing, count })
-})
-
-/* ---------------- COMMENTS & ACCESS ---------------- */
+/* --------------------------------
+ * COMMENTS / ACCESS / STATS (unchanged)
+ * -------------------------------- */
 
 router.get('/:id/comments', async (req, res) => {
   const list = await prisma.comment.findMany({
@@ -457,8 +497,6 @@ router.delete('/:id/access/:userId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---------------- STATS ---------------- */
-
 router.get('/:id/stats', async (req, res) => {
   try {
     const id = req.params.id
@@ -506,7 +544,7 @@ router.get('/:id/stats', async (req, res) => {
       count,
       num1: { min: num(nums?.num1_min), max: num(nums?.num1_max), avg: num(nums?.num1_avg), median: num(nums?.num1_med) },
       num2: { min: num(nums?.num2_min), max: num(nums?.num2_max), avg: num(nums?.num2_avg), median: num(nums?.num2_med) },
-      num3: { min: num(nums?.num3_min), max: num(nums?.num3_max), avg: num(nums?.num3_avg), median: num(nums?.num3_med) },
+      num3: { min: num(nums?.num3_min), max: num(nums?.num3_avg), avg: num(nums?.num3_avg), median: num(nums?.num3_med) },
       topText,
       timeline,
       contributors,

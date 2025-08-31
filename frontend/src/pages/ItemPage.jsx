@@ -1,3 +1,4 @@
+// frontend/src/pages/ItemPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import api from '../api/client'
@@ -9,7 +10,7 @@ export default function ItemPage() {
   const [fields,setFields] = useState(null)
   const [fieldsFlat, setFieldsFlat] = useState([])
   const [likes,setLikes] = useState(0)
-  const [canWrite, setCanWrite] = useState(false) // ✅ NEW
+  const [canWrite, setCanWrite] = useState(false)
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
@@ -17,13 +18,55 @@ export default function ItemPage() {
     setFields(data.fields)
     setFieldsFlat(data.fieldsFlat || [])
     setLikes(data.item?._count?.likes ?? 0)
-    setCanWrite(!!data.canWrite) // ✅ from API
+    setCanWrite(!!data.canWrite)
   }
   useEffect(()=>{ load() },[id,itemId])
 
+  // list of visible inputs in the correct cross-group order
+  const ordered = useMemo(() => {
+    if (!fields || !fieldsFlat) return []
+    const keyOf = (g) => {
+      const k = (g || '').toString().toLowerCase()
+      if (k === 'number') return 'num'
+      return k
+    }
+    return (fieldsFlat || [])
+      .filter(f => {
+        const arr = fields[keyOf(f.group)] || []
+        const cfg = arr[f.slot - 1]
+        return !!cfg?.show
+      })
+  }, [fields, fieldsFlat])
+
+  if (!item || !fields) return <div className="p-6">Loading…</div>
+
+  // build clean payload & prevent NaN
+  const buildPayload = () => {
+    const allowed = new Set([
+      'customId',
+      'text1','text2','text3',
+      'mtext1','mtext2','mtext3',
+      'num1','num2','num3',
+      'link1','link2','link3',
+      'bool1','bool2','bool3',
+      'img1','img2','img3'
+    ])
+    const out = {}
+    for (const [k, v] of Object.entries(item)) {
+      if (!allowed.has(k)) continue
+      if (k.startsWith('num')) {
+        const n = Number(v)
+        out[k] = Number.isFinite(n) ? n : null
+      } else {
+        out[k] = v
+      }
+    }
+    return out
+  }
+
   const save = async () => {
     if (!canWrite) return
-    await api.put(`/api/inventories/${id}/items/${itemId}`, item)
+    await api.put(`/api/inventories/${id}/items/${itemId}`, buildPayload())
     await load()
   }
 
@@ -32,36 +75,23 @@ export default function ItemPage() {
     setLikes(data.count)
   }
 
-  // ✅ Hooks MUST NOT be called conditionally — compute ordered safely here
-  const ordered = useMemo(() => {
-    if (!fields || !fieldsFlat) return []
-    const mapKey = (g) => {
-      const k = (g || '').toString().toLowerCase()
-      if (k === 'number') return 'num' // backend 'NUMBER' -> 'num'
-      return k
-    }
-    return (fieldsFlat || [])
-      .filter(f => {
-        const key = mapKey(f.group)
-        const arr = fields[key] || []
-        const cfg = arr[f.slot - 1]
-        return !!cfg?.show
-      })
-  }, [fields, fieldsFlat])
-
-  if (!item || !fields) return <div className="p-6">Loading…</div>
-
   const inputFor = (f) => {
-    const base = (f.group || '').toString().toLowerCase()
+    const base = f.group
     const key =
-      (base === 'number' ? 'num'
-      : base === 'text' ? 'text'
-      : base === 'mtext' ? 'mtext'
-      : base === 'link' ? 'link'
-      : base === 'bool' ? 'bool' : 'img') + f.slot
-    const label = fields[(base === 'number' ? 'num' : base)]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
+      (base === 'NUMBER' ? 'num'
+      : base === 'TEXT'   ? 'text'
+      : base === 'MTEXT'  ? 'mtext'
+      : base === 'LINK'   ? 'link'
+      : base === 'BOOL'   ? 'bool' : 'img') + f.slot
 
-    switch (f.group) {
+    const labelMapKey = (base === 'NUMBER' ? 'num'
+      : base === 'TEXT' ? 'text'
+      : base === 'MTEXT' ? 'mtext'
+      : base === 'LINK' ? 'link'
+      : base === 'BOOL' ? 'bool' : 'image')
+    const label = fields[labelMapKey]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
+
+    switch (base) {
       case 'TEXT':
         return (
           <label className="grid gap-1">
@@ -82,7 +112,10 @@ export default function ItemPage() {
         return (
           <label className="grid gap-1">
             <span>{label}</span>
-            <input type="number" value={item[key]??''} onChange={e=>setItem({...item, [key]: e.target.valueAsNumber})}
+            <input type="number" value={item[key] ?? ''} onChange={e=>{
+              const n = e.target.value === '' ? null : e.target.valueAsNumber
+              setItem({...item, [key]: Number.isFinite(n) ? n : null})
+            }}
               className="px-2 py-1 border rounded" disabled={!canWrite}/>
           </label>
         )
@@ -109,7 +142,7 @@ export default function ItemPage() {
               value={item[`img${f.slot}`] || ''}
               onChange={(u)=>setItem({...item, [`img${f.slot}`]: u})}
               inventoryId={id}
-              canWrite={canWrite} // ✅ hide controls if cannot write
+              canWrite={canWrite}
             />
           </div>
         )
@@ -135,4 +168,3 @@ export default function ItemPage() {
     </div>
   )
 }
-
