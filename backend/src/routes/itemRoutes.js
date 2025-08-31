@@ -8,3 +8,4 @@ const router = Router()
 // See searchRoutes for actual search implementation.
 
 export default router
+

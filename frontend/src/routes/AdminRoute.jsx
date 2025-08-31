@@ -1,3 +1,5 @@
+
+
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../store/auth'
 
@@ -9,3 +11,5 @@ export default function AdminRoute({ children }) {
   const redirect = encodeURIComponent(location.pathname + location.search)
   return <Navigate to={`/login?redirect=${redirect}`} replace />
 }
+
+

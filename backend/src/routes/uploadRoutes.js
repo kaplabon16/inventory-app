@@ -1,15 +1,15 @@
-// backend/src/routes/uploadRoutes.js
 import { Router } from 'express'
 import multer from 'multer'
 import fs from 'fs'
 import path from 'path'
 import { requireAuth } from '../middleware/auth.js'
 import { prisma } from '../services/prisma.js'
-import { canWriteInventory } from '../utils/validators.js'
+import { isOwnerOrAdmin } from '../utils/validators.js'
 import { v2 as cloudinary } from 'cloudinary'
 
 const router = Router()
 
+// Cloudinary config if present
 const hasCloud = !!process.env.CLOUDINARY_URL || (
   process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
 )
@@ -42,9 +42,7 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
 
     const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
     if (!inv) return res.status(404).json({ error: 'Inventory not found' })
-
-    // 🔐 allow owner/admin OR public-writer OR explicit write access
-    if (!canWriteInventory(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
+    if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Owner/Admin only' })
 
     if (hasCloud) {
       const stream = cloudinary.uploader.upload_stream(
@@ -61,7 +59,7 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       return
     }
 
-    // Fallback local FS
+    // Fallback: local FS
     const ts = Date.now()
     const safe = (req.file.originalname || 'file').replace(/[^a-z0-9_.-]/gi, '_')
     const filename = `${ts}_${safe}`
@@ -78,3 +76,5 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
 })
 
 export default router
+
+

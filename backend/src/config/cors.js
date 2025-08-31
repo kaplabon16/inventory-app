@@ -1,3 +1,4 @@
+
 // backend/src/config/cors.js
 import dotenv from 'dotenv'
 import cors from 'cors'
@@ -14,6 +15,8 @@ function norm(u) {
 }
 
 const primary = norm(process.env.FRONTEND_URL)
+
+// Extra CSV list (domains or full URLs)
 const extra = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(norm)
@@ -21,8 +24,16 @@ const extra = (process.env.CORS_ORIGINS || '')
 
 const allowSet = new Set([primary, ...extra].filter(Boolean))
 
+/**
+ * Accept:
+ *  - Exact FRONTEND_URL
+ *  - Any domain listed in CORS_ORIGINS
+ *  - Any *.vercel.app (preview builds)
+ *  - localhost dev
+ */
 export default {
   origin(origin, cb) {
+    // Non-browser / same-origin / server-to-server
     if (!origin) return cb(null, true)
     try {
       const u = new URL(origin)
@@ -45,3 +56,10 @@ export default {
   optionsSuccessStatus: 204,
   preflightContinue: false,
 }
+
+/**
+ * Usage in index.js:
+ *   app.use((req,res,next)=>{ res.setHeader('Vary','Origin'); next() })
+ *   app.use(cors(corsCfg))
+ *   app.options('*', cors(corsCfg))
+ */
