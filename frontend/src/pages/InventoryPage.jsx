@@ -43,6 +43,9 @@ export default function InventoryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newType, setNewType] = useState('text')
 
+  // 🔔 keep hooks before any conditional return
+  const [dragIndex, setDragIndex] = useState(-1)
+
   const toast = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2000) }
 
   const load = async () => {
@@ -94,6 +97,20 @@ export default function InventoryPage() {
 
   const idPreview = useMemo(() => renderIdPreview([]), []) // not used here, keep stable
 
+  // ⬇️ Build current flat list for the reorder UI from {fields} + {order}
+  const currentFlat = useMemo(() => {
+    const titleFor = (g, s) => {
+      const key = g === 'NUMBER' ? 'num'
+        : g === 'TEXT' ? 'text'
+        : g === 'MTEXT' ? 'mtext'
+        : g === 'LINK' ? 'link'
+        : g === 'BOOL' ? 'bool' : 'image'
+      return (fields[key] || [])[s - 1]?.title || `${g} ${s}`
+    }
+    return order.map(o => ({ ...o, label: titleFor(o.group, o.slot) }))
+  }, [order, fields])
+
+  // ✅ early returns come AFTER all hooks
   if (loadErr) return <div className="p-6 text-red-600">{loadErr}</div>
   if (!inv) return <div className="p-6">Loading…</div>
 
@@ -192,7 +209,6 @@ export default function InventoryPage() {
   }
 
   // Drag & drop reorder across ALL fields using fieldsFlat order mirror (order[])
-  const [dragIndex, setDragIndex] = useState(-1)
   const onDragStart = (i) => (e) => { setDragIndex(i); e.dataTransfer.effectAllowed = 'move' }
   const onDragOver = (i) => (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
   const onDrop = (i) => (e) => {
@@ -214,19 +230,6 @@ export default function InventoryPage() {
       toast('Failed to save fields')
     }
   }
-
-  // Build current flat list for the reorder UI from {fields} + {order}
-  const currentFlat = useMemo(() => {
-    const titleFor = (g, s) => {
-      const key = g === 'NUMBER' ? 'num'
-        : g === 'TEXT' ? 'text'
-        : g === 'MTEXT' ? 'mtext'
-        : g === 'LINK' ? 'link'
-        : g === 'BOOL' ? 'bool' : 'image'
-      return (fields[key] || [])[s - 1]?.title || `${g} ${s}`
-    }
-    return order.map(o => ({ ...o, label: titleFor(o.group, o.slot) }))
-  }, [order, fields])
 
   return (
     <div className="max-w-6xl p-4 mx-auto">
