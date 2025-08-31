@@ -1,3 +1,4 @@
+// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -7,7 +8,8 @@ import Table from '../components/Table'
 import { useTranslation } from 'react-i18next'
 import { renderIdPreview } from '../utils/idPreview'
 import { useAuth } from '../store/auth'
-import UploadImage from '../components/UploadImage'
+import MultiImagePicker from '../components/MultiImagePicker'
+import FieldsDesigner, { flattenFields, packFields } from '../components/FieldsDesigner'
 
 const groupLabels = {
   text: 'Text',
@@ -17,15 +19,6 @@ const groupLabels = {
   bool: 'Checkboxes (Boolean)',
   image: 'Images'
 }
-
-const makeEmpty = () => ({
-  text:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  mtext: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  num:   [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  link:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  bool:  [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-  image: [{title:'',desc:'',show:false},{title:'',desc:'',show:false},{title:'',desc:'',show:false}],
-})
 
 const defaultElements = [
   { order:1, type:'FIXED', param:'INV-' },
@@ -41,9 +34,10 @@ export default function InventoryPage() {
 
   const [inv, setInv] = useState(null)
   const [canEdit, setCanEdit] = useState(false)
-  const [canWrite, setCanWrite] = useState(false) // ✅ NEW
+  const [canWrite, setCanWrite] = useState(false)
   const [tab, setTab] = useState('items')
-  const [fields,setFields] = useState(makeEmpty())
+  const [fields,setFields] = useState({ text:[], mtext:[], num:[], link:[], bool:[], image:[] })
+  const [order,setOrder] = useState([])  // [{group,slot}] drives Add Item order
   const [elements,setElements] = useState(defaultElements)
   const [items,setItems] = useState([])
   const [sel,setSel] = useState([])
@@ -59,10 +53,25 @@ export default function InventoryPage() {
     setLoadErr('')
     try {
       const { data } = await api.get(`/api/inventories/${id}`)
-      setInv(data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1, imageUrl: '' })
+      const inv0 = data?.inventory || { id, title: 'Untitled', description: '', publicWrite: false, categoryId: 1 }
+      setInv({
+        ...inv0,
+        // ⬇️ multi-images default
+        image1: inv0.image1 || '',
+        image2: inv0.image2 || '',
+        image3: inv0.image3 || ''
+      })
       setCanEdit(!!data?.canEdit)
-      setCanWrite(!!data?.canWrite) // ✅ fetch from API
-      setFields(data?.fields || makeEmpty())
+      setCanWrite(!!data?.canWrite)
+
+      const grouped = data?.fields || { text:[], mtext:[], num:[], link:[], bool:[], image:[] }
+      setFields(grouped)
+      // Build order from fieldsFlat if provided; else from grouped in given order
+      const ord = Array.isArray(data?.fieldsFlat) && data.fieldsFlat.length
+        ? data.fieldsFlat.map(x=>({ group: (String(x.group).toLowerCase()==='number'?'num':String(x.group).toLowerCase()), slot: x.slot }))
+        : flattenFields(grouped).map(({group,slot})=>({group,slot}))
+      setOrder(ord)
+
       setElements(data?.elements || defaultElements)
       setVersion(data?.inventory?.version || 1)
       setItems(Array.isArray(data?.items) ? data.items : [])
@@ -75,9 +84,7 @@ export default function InventoryPage() {
     try {
       const cats = await api.get('/api/categories')
       setCategories(Array.isArray(cats.data) ? cats.data : [])
-    } catch {
-      setCategories([])
-    }
+    } catch { setCategories([]) }
   }
   useEffect(()=>{ load() },[id])
 
@@ -85,9 +92,7 @@ export default function InventoryPage() {
     try {
       const { data } = await api.get(`/api/inventories/${id}/stats`)
       setStats(data)
-    } catch {
-      setStats(null)
-    }
+    } catch { setStats(null) }
   }
   useEffect(()=>{ if (tab==='stats') loadStats() },[tab])
 
@@ -107,12 +112,11 @@ export default function InventoryPage() {
     try {
       const { data } = await api.put(`/api/inventories/${id}`, {
         ...inv,
-        imageUrl: inv.imageUrl || null,
         version,
         categoryId: inv.categoryId
       })
       setVersion(data.version)
-      setInv(data)
+      setInv(prev => ({ ...prev, ...data }))
       toast('Saved settings')
     } catch (e) {
       if (e?.response?.status === 409) toast('Version conflict — reload and try again')
@@ -125,15 +129,9 @@ export default function InventoryPage() {
     if (!canWrite) { toast('You do not have write access.'); return }
     try {
       const { data } = await api.post(`/api/inventories/${id}/items`, {})
-      if (data?.id) {
-        window.location.href = `/inventories/${id}/item/${data.id}`
-      } else {
-        toast('Created, but no item id returned.')
-        await load()
-      }
-    } catch {
-      toast('Failed to add item')
-    }
+      if (data?.id) window.location.href = `/inventories/${id}/item/${data.id}`
+      else { toast('Created, but no item id returned.'); await load() }
+    } catch { toast('Failed to add item') }
   }
 
   const removeSelected = async () => {
@@ -145,32 +143,7 @@ export default function InventoryPage() {
       setSel([])
       await load()
       toast('Deleted selected items')
-    } catch {
-      toast('Delete failed for one or more items')
-    }
-  }
-
-  const addField = (group) => {
-    const exists = fields[group] || []
-    if (exists.length >= 3) return
-    const next = { ...fields, [group]: [...exists, { title:'', desc:'', show:false }] }
-    setFields(next)
-  }
-  const moveField = (group, idx, dir) => {
-    const arr = [...(fields[group] || [])]
-    const j = idx + dir
-    if (j < 0 || j >= arr.length) return
-    ;[arr[idx], arr[j]] = [arr[j], arr[idx]]
-    setFields({ ...fields, [group]: arr })
-  }
-  const saveFields = async () => {
-    try {
-      await api.post(`/api/inventories/${id}/fields`, { fields })
-      await load()
-      toast('Saved field config')
-    } catch {
-      toast('Failed to save fields')
-    }
+    } catch { toast('Delete failed for one or more items') }
   }
 
   const numLabels = [
@@ -178,6 +151,11 @@ export default function InventoryPage() {
     fields.num?.[1]?.title || 'Number 2',
     fields.num?.[2]?.title || 'Number 3'
   ]
+
+  const onImagesChange = (arr) => {
+    const [image1='', image2='', image3=''] = (arr || [])
+    setInv(prev => ({ ...prev, image1, image2, image3 }))
+  }
 
   return (
     <div className="max-w-6xl p-4 mx-auto">
@@ -214,14 +192,15 @@ export default function InventoryPage() {
         </label>
       </div>
 
+      {/* Multi images for inventory */}
       <div className="mt-3">
-        {/* ✅ Only show upload controls if user can write (or edit) */}
-        <UploadImage
-          label="Inventory image"
-          value={inv.imageUrl || ''}
-          onChange={u => setInv({ ...inv, imageUrl: u })}
+        <MultiImagePicker
+          label="Inventory images"
+          values={[inv.image1, inv.image2, inv.image3].filter(Boolean)}
+          onChange={onImagesChange}
           inventoryId={id}
           canWrite={canWrite || canEdit}
+          max={3}
         />
       </div>
 
@@ -326,57 +305,26 @@ export default function InventoryPage() {
       )}
 
       {tab==='fields' && (
-        <div className="grid gap-6 mt-4">
-          {(['text','mtext','num','link','bool','image']).map(group=>(
-            <div key={group} className="p-3 border rounded">
-              <div className="flex items-center justify-between mb-2">
-                <div className="font-medium">{groupLabels[group]}</div>
-                {canEdit && (fields[group]?.length || 0) < 3 && (
-                  <button onClick={()=>addField(group)} className="px-2 py-1 text-sm border rounded">
-                    Add element
-                  </button>
-                )}
-              </div>
-
-              {(fields[group] || []).map((f,idx)=>(
-                <div key={idx} className="grid items-center gap-2 mb-2 md:grid-cols-5">
-                  <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Title" value={f.title}
-                    onChange={e=>{
-                      const next = {...fields}; next[group][idx].title = e.target.value; setFields(next)
-                    }}/>
-                  <input disabled={!canEdit} className="px-2 py-1 border rounded" placeholder="Description" value={f.desc}
-                    onChange={e=>{
-                      const next = {...fields}; next[group][idx].desc = e.target.value; setFields(next)
-                    }}/>
-                  <label className="flex items-center gap-2">
-                    <input type="checkbox" disabled={!canEdit} checked={!!f.show}
-                      onChange={e=>{
-                        const next = {...fields}; next[group][idx].show = e.target.checked; setFields(next)
-                      }}/>
-                    <span>Show in table/Add item</span>
-                  </label>
-                  {canEdit && (
-                    <div className="flex gap-2">
-                      <button className="px-2 py-1 text-sm border rounded"
-                        onClick={()=>moveField(group, idx, -1)}>↑</button>
-                      <button className="px-2 py-1 text-sm border rounded"
-                        onClick={()=>moveField(group, idx, +1)}>↓</button>
-                      <button className="px-2 py-1 text-sm border rounded"
-                        onClick={()=>{
-                          const next = {...fields}; next[group].splice(idx,1); setFields(next)
-                        }}>Remove</button>
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {canEdit && (
-                <div className="mt-2">
-                  <button className="px-3 py-1 text-sm border rounded" onClick={saveFields}>Save</button>
-                </div>
-              )}
+        <div className="grid gap-4 mt-4">
+          <FieldsDesigner
+            value={fields}
+            onChange={(grouped, ord) => { setFields(grouped); setOrder(ord) }}
+          />
+          {canEdit && (
+            <div>
+              <button className="px-3 py-1 text-sm border rounded"
+                onClick={async ()=>{
+                  await api.post(`/api/inventories/${id}/fields`, { fields, order })
+                  await load()
+                  toast('Saved field config')
+                }}>
+                Save
+              </button>
             </div>
-          ))}
+          )}
+          <div className="text-xs text-gray-500">
+            Tip: “Show in Add Item” controls visibility; order here controls the exact order shown there.
+          </div>
         </div>
       )}
 
@@ -439,9 +387,7 @@ function AccessTab({ id, canEdit }) {
     try {
       const { data } = await api.get(`/api/inventories/${id}/access`)
       setList(Array.isArray(data) ? data : [])
-    } catch {
-      setList([])
-    }
+    } catch { setList([]) }
   }
   useEffect(()=>{ load() },[id])
 
@@ -518,9 +464,7 @@ function DiscussionTab({ id }) {
     try {
       const { data } = await api.get(`/api/inventories/${id}/comments`)
       setList(Array.isArray(data) ? data : [])
-    } catch {
-      setList([])
-    }
+    } catch { setList([]) }
   }
   useEffect(()=>{ load() },[id])
 
@@ -549,5 +493,3 @@ function DiscussionTab({ id }) {
     </div>
   )
 }
-
-
