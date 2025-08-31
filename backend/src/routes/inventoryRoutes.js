@@ -62,16 +62,13 @@ router.get('/', optionalAuth, async (req, res) => {
   const mine = req.query.mine === '1'
   const canW = req.query.canWrite === '1'
 
-  // profile lists
   if ((mine || canW) && !req.user) return res.json([])
 
   if (mine) {
     const list = await prisma.inventory.findMany({
       where: { ownerId: req.user.id },
       orderBy: { updatedAt: 'desc' },
-      include: {
-        _count: { select: { items: true } }
-      }
+      include: { _count: { select: { items: true } } }
     })
     return res.json(list.map(x => ({
       id: x.id, title: x.title, itemsCount: x._count.items
@@ -88,16 +85,13 @@ router.get('/', optionalAuth, async (req, res) => {
         ]
       },
       orderBy: { updatedAt: 'desc' },
-      include: {
-        _count: { select: { items: true } }
-      }
+      include: { _count: { select: { items: true } } }
     })
     return res.json(list.map(x => ({
       id: x.id, title: x.title, itemsCount: x._count.items
     })))
   }
 
-  // default: everything (condensed)
   const take = Math.min(Number(req.query.take || 100), 200)
   const list = await prisma.inventory.findMany({
     include: { _count: { select: { items: true } }, owner: { select: { name: true } }, category: true },
@@ -135,8 +129,12 @@ router.get('/:id', async (req, res) => {
   })
   if (!inv) return res.status(404).json({ error: 'Not found' })
 
-  const fields = await prisma.inventoryField.findMany({ where: { inventoryId: inv.id } })
-  const elems = await prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } })
+  const [fields, elems, access] = await Promise.all([
+    prisma.inventoryField.findMany({ where: { inventoryId: inv.id } }),
+    prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } }),
+    prisma.inventoryAccess.findMany({ where: { inventoryId: inv.id } }),
+  ])
+
   const pack = (type) => [1, 2, 3].map(slot => {
     const x = fields.find(f => f.type === type && f.slot === slot)
     return { title: x?.title || '', desc: x?.description || '', show: !!x?.showInTable }
@@ -164,10 +162,12 @@ router.get('/:id', async (req, res) => {
   })
 
   const canEdit = !!(req.user?.id && (req.user.roles?.includes('ADMIN') || req.user.id === inv.ownerId))
+  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access)) // ✅ NEW
 
   res.json({
     inventory: inv,
     canEdit,
+    canWrite, // ✅ NEW
     fields: {
       text: pack('TEXT'),
       mtext: pack('MTEXT'),
@@ -238,10 +238,8 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   const groups = ['text','mtext','num','link','bool','image']
   const typeMap = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL', image: 'IMAGE' }
 
-  // compute display orders from the single flat "order" list
   const orderMap = {}
   order.forEach((x, idx) => {
-    // x.group is enum name (TEXT/MTEXT/...), keep consistent with backend
     orderMap[`${x.group}-${x.slot}`] = idx
   })
 
@@ -323,7 +321,7 @@ router.post('/:id/items/bulk-delete', requireAuth, async (req, res) => {
 })
 
 router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
-  const { inv } = await getInvWithAccess(req.params.id)
+  const { inv, access } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
   const item = await prisma.item.findUnique({
     where: { id: req.params.itemId },
@@ -340,13 +338,16 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
     .map(f => ({ group: f.type, slot: f.slot, title: f.title, order: f.displayOrder ?? 0 }))
     .sort((a,b)=> a.order - b.order || (a.group+b.slot).localeCompare(b.group+b.slot))
 
+  const canWrite = !!(req.user?.id && canWriteInventory(req.user, inv, access)) // ✅ NEW
+
   res.json({
     item,
     fields: {
       text: pack('TEXT'), mtext: pack('MTEXT'), num: pack('NUMBER'),
       link: pack('LINK'), bool: pack('BOOL'), image: pack('IMAGE'),
     },
-    fieldsFlat
+    fieldsFlat,
+    canWrite, // ✅ NEW
   })
 })
 
@@ -377,7 +378,6 @@ router.post('/:id/items/:itemId/like', requireAuth, async (req, res) => {
   const item = await prisma.item.findUnique({ where: { id: req.params.itemId } })
   if (!item || item.inventoryId !== inv.id) return res.status(404).json({ error: 'Item not found' })
 
-  // toggle
   const key = { itemId_userId: { itemId: item.id, userId: req.user.id } }
   const existing = await prisma.like.findUnique({ where: key }).catch(() => null)
 

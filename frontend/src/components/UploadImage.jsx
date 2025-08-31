@@ -5,7 +5,8 @@ export default function UploadImage({
   value,
   onChange,
   label = "Image",
-  inventoryId = "" // ✅ NEW: required by backend
+  inventoryId = "",
+  canWrite = false, // ✅ NEW: control visibility of upload actions
 }) {
   const fileRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -26,10 +27,10 @@ export default function UploadImage({
     try {
       const form = new FormData()
       form.append("file", f)
-      form.append("inventoryId", inventoryId) // ✅ include id in multipart
+      form.append("inventoryId", inventoryId)
       const { data } = await api.post("/api/upload", form, {
         headers: { "Content-Type": "multipart/form-data" },
-        params: { inventoryId } // ✅ and as query, either one will be read
+        params: { inventoryId },
       })
       onChange?.(data.url)
     } catch (e) {
@@ -51,23 +52,28 @@ export default function UploadImage({
       <div className="flex items-center gap-2">
         <span className="text-sm">{label}</span>
 
-        <button
-          type="button"
-          onClick={pick}
-          className="px-2 py-1 text-sm border rounded disabled:opacity-50"
-          disabled={loading || !inventoryId}
-          title={!inventoryId ? "Open or create an inventory first" : ""}
-        >
-          {loading ? "Uploading…" : "Upload from device"}
-        </button>
+        {/* ✅ Hide upload controls unless user can write */}
+        {canWrite && (
+          <>
+            <button
+              type="button"
+              onClick={pick}
+              className="px-2 py-1 text-sm border rounded disabled:opacity-50"
+              disabled={loading || !inventoryId}
+              title={!inventoryId ? "Open or create an inventory first" : ""}
+            >
+              {loading ? "Uploading…" : "Upload from device"}
+            </button>
 
-        <button
-          type="button"
-          onClick={pasteUrl}
-          className="px-2 py-1 text-sm border rounded"
-        >
-          Paste URL
-        </button>
+            <button
+              type="button"
+              onClick={pasteUrl}
+              className="px-2 py-1 text-sm border rounded"
+            >
+              Paste URL
+            </button>
+          </>
+        )}
 
         {value && (
           <a
