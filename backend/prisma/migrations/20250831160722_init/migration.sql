@@ -162,25 +162,55 @@ CREATE TABLE "Like" (
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 
 -- CreateIndex
+CREATE INDEX "User_createdAt_idx" ON "User"("createdAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Category_name_key" ON "Category"("name");
 
 -- CreateIndex
 CREATE INDEX "Inventory_ownerId_idx" ON "Inventory"("ownerId");
 
 -- CreateIndex
+CREATE INDEX "Inventory_updatedAt_idx" ON "Inventory"("updatedAt");
+
+-- CreateIndex
 CREATE INDEX "InventoryField_displayOrder_idx" ON "InventoryField"("displayOrder");
+
+-- CreateIndex
+CREATE INDEX "InventoryField_inventoryId_idx" ON "InventoryField"("inventoryId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "InventoryField_inventoryId_type_slot_key" ON "InventoryField"("inventoryId", "type", "slot");
 
 -- CreateIndex
+CREATE UNIQUE INDEX "InventoryField_inventoryId_displayOrder_key" ON "InventoryField"("inventoryId", "displayOrder");
+
+-- CreateIndex
+CREATE INDEX "CustomIdElement_inventoryId_idx" ON "CustomIdElement"("inventoryId");
+
+-- CreateIndex
+CREATE INDEX "CustomIdElement_order_idx" ON "CustomIdElement"("order");
+
+-- CreateIndex
 CREATE INDEX "Item_inventoryId_idx" ON "Item"("inventoryId");
+
+-- CreateIndex
+CREATE INDEX "Item_updatedAt_idx" ON "Item"("updatedAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Item_inventoryId_customId_key" ON "Item"("inventoryId", "customId");
 
 -- CreateIndex
+CREATE INDEX "Comment_inventoryId_createdAt_idx" ON "Comment"("inventoryId", "createdAt");
+
+-- CreateIndex
+CREATE INDEX "Comment_itemId_createdAt_idx" ON "Comment"("itemId", "createdAt");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "Tag_name_key" ON "Tag"("name");
+
+-- CreateIndex
+CREATE INDEX "Like_createdAt_idx" ON "Like"("createdAt");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "Like_itemId_userId_key" ON "Like"("itemId", "userId");
