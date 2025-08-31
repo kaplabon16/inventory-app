@@ -37,27 +37,29 @@ const upload = multer({
 router.post('/', requireAuth, upload.single('file'), async (req, res) => {
   try {
     const inventoryId = (req.query.inventoryId || req.body.inventoryId || '').toString().trim()
-    const scope = (req.query.scope || req.body.scope || 'item').toString() // 'item' | 'inventory'
     if (!inventoryId) return res.status(400).json({ error: 'Missing inventoryId' })
 
-    const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
+    const [inv, access] = await Promise.all([
+      prisma.inventory.findUnique({ where: { id: inventoryId } }),
+      prisma.inventoryAccess.findMany({ where: { inventoryId } }),
+    ])
     if (!inv) return res.status(404).json({ error: 'Inventory not found' })
 
-    // permissions:
-    // - inventory images => owner/admin only
-    // - item images      => anyone who can write (public-write or explicit access)
-    if (scope === 'inventory') {
-      if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Owner/Admin only' })
-    } else {
-      const acl = await prisma.inventoryAccess.findMany({ where: { inventoryId } })
-      if (!canWriteInventory(req.user, inv, acl)) return res.status(403).json({ error: 'Forbidden' })
+    // ✅ allow anyone with write permission (owner/admin/public-write/access list)
+    if (!canWriteInventory(req.user, inv, access)) {
+      return res.status(403).json({ error: 'Forbidden' })
     }
+
+    if (!req.file) return res.status(400).json({ error: 'No file' })
 
     if (hasCloud) {
       const stream = cloudinary.uploader.upload_stream(
         { folder: `inventory/${inventoryId}`, resource_type: 'image' },
         (err, result) => {
-          if (err) return res.status(500).json({ error: 'Upload failed' })
+          if (err) {
+            console.error('[cloudinary]', err)
+            return res.status(500).json({ error: 'Upload failed' })
+          }
           return res.json({ url: result.secure_url })
         }
       )
@@ -65,6 +67,7 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       return
     }
 
+    // fallback: local FS
     const ts = Date.now()
     const safe = (req.file.originalname || 'file').replace(/[^a-z0-9_.-]/gi, '_')
     const filename = `${ts}_${safe}`

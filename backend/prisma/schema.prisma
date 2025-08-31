@@ -41,10 +41,13 @@ model Inventory {
   categoryId  Int
   category    Category @relation(fields: [categoryId], references: [id])
 
-  // 🔺 multi-image support for inventory
-  image1      String?
-  image2      String?
-  image3      String?
+  // deprecated single image kept for backward compatibility
+  imageUrl    String?
+
+  // NEW: up to three images + reorder at client by swapping values
+  img1        String?
+  img2        String?
+  img3        String?
 
   publicWrite Boolean  @default(false)
   version     Int      @default(1)
@@ -72,7 +75,7 @@ model InventoryField {
   description  String?
   showInTable  Boolean   @default(false)
   displayOrder Int       @default(0)
-  required     Boolean   @default(false) // 🔺 new
+  required     Boolean   @default(false) // NEW (optional UX flag)
 
   @@unique([inventoryId, type, slot])
   @@index([displayOrder])
@@ -140,7 +143,7 @@ model Item {
   bool2  Boolean?
   bool3  Boolean?
 
-  // up to 3 images per item
+  // already supported in your code
   img1   String?
   img2   String?
   img3   String?
