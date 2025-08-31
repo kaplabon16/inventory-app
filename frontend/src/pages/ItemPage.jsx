@@ -9,7 +9,7 @@ export default function ItemPage() {
   const [fields,setFields] = useState(null)
   const [fieldsFlat, setFieldsFlat] = useState([])
   const [likes,setLikes] = useState(0)
-  const [canWrite, setCanWrite] = useState(false) // ✅ NEW
+  const [canWrite, setCanWrite] = useState(false)
 
   const load = async () => {
     const { data } = await api.get(`/api/inventories/${id}/items/${itemId}`)
@@ -17,7 +17,7 @@ export default function ItemPage() {
     setFields(data.fields)
     setFieldsFlat(data.fieldsFlat || [])
     setLikes(data.item?._count?.likes ?? 0)
-    setCanWrite(!!data.canWrite) // ✅ from API
+    setCanWrite(!!data.canWrite)
   }
   useEffect(()=>{ load() },[id,itemId])
 
@@ -32,14 +32,8 @@ export default function ItemPage() {
     setLikes(data.count)
   }
 
-  // ✅ Hooks MUST NOT be called conditionally — compute ordered safely here
   const ordered = useMemo(() => {
     if (!fields || !fieldsFlat) return []
-    const mapKey = (g) => {
-      const k = (g || '').toString().toLowerCase()
-      if (k === 'number') return 'num' // backend 'NUMBER' -> 'num'
-      return k
-    }
     return (fieldsFlat || [])
       .filter(f => {
         const key = mapKey(f.group)
@@ -51,17 +45,34 @@ export default function ItemPage() {
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
-  const inputFor = (f) => {
-    const base = (f.group || '').toString().toLowerCase()
-    const key =
-      (base === 'number' ? 'num'
-      : base === 'text' ? 'text'
-      : base === 'mtext' ? 'mtext'
-      : base === 'link' ? 'link'
-      : base === 'bool' ? 'bool' : 'img') + f.slot
-    const label = fields[(base === 'number' ? 'num' : base)]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
+  const moveImg = (from, to) => {
+    const keys = ['img1','img2','img3']
+    if (from<0 || to<0 || from>2 || to>2) return
+    const next = { ...item }
+    ;[next[keys[from]], next[keys[to]]] = [next[keys[to]], next[keys[from]]]
+    setItem(next)
+  }
+  const clearImg = (slot) => {
+    const key = `img${slot}`
+    setItem({ ...item, [key]: null })
+  }
 
-    switch (f.group) {
+  const inputFor = (f) => {
+    const base = (f.group || '').toString().toUpperCase()
+    const key =
+      (base === 'NUMBER' ? 'num'
+      : base === 'TEXT' ? 'text'
+      : base === 'MTEXT' ? 'mtext'
+      : base === 'LINK' ? 'link'
+      : base === 'BOOL' ? 'bool' : 'img') + f.slot
+
+    const label = fields[(base === 'NUMBER' ? 'num'
+      : base === 'TEXT' ? 'text'
+      : base === 'MTEXT' ? 'mtext'
+      : base === 'LINK' ? 'link'
+      : base === 'BOOL' ? 'bool' : 'image')]?.[f.slot-1]?.title || `${f.group} ${f.slot}`
+
+    switch (base) {
       case 'TEXT':
         return (
           <label className="grid gap-1">
@@ -104,13 +115,24 @@ export default function ItemPage() {
       case 'IMAGE':
         return (
           <div className="grid gap-1">
+            <span className="text-sm">{label}</span>
             <UploadImage
               label={label}
               value={item[`img${f.slot}`] || ''}
               onChange={(u)=>setItem({...item, [`img${f.slot}`]: u})}
               inventoryId={id}
-              canWrite={canWrite} // ✅ hide controls if cannot write
+              canWrite={canWrite}
+              scope="item"
             />
+            {canWrite && (
+              <div className="flex justify-between">
+                <div className="flex gap-2">
+                  <button className="px-2 py-1 text-sm border rounded disabled:opacity-50" disabled={f.slot===1} onClick={()=>moveImg(f.slot-1, f.slot-2)}>←</button>
+                  <button className="px-2 py-1 text-sm border rounded disabled:opacity-50" disabled={f.slot===3} onClick={()=>moveImg(f.slot-1, f.slot)}>→</button>
+                </div>
+                <button className="px-2 py-1 text-sm border rounded" onClick={()=>clearImg(f.slot)}>Delete</button>
+              </div>
+            )}
           </div>
         )
       default: return null
@@ -134,4 +156,14 @@ export default function ItemPage() {
       </div>
     </div>
   )
+}
+
+function mapKey(g) {
+  const k = (g || '').toString().toUpperCase()
+  if (k === 'NUMBER') return 'num'
+  if (k === 'TEXT') return 'text'
+  if (k === 'MTEXT') return 'mtext'
+  if (k === 'LINK') return 'link'
+  if (k === 'BOOL') return 'bool'
+  return 'image'
 }

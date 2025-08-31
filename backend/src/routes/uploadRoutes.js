@@ -4,12 +4,11 @@ import fs from 'fs'
 import path from 'path'
 import { requireAuth } from '../middleware/auth.js'
 import { prisma } from '../services/prisma.js'
-import { isOwnerOrAdmin } from '../utils/validators.js'
+import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
 import { v2 as cloudinary } from 'cloudinary'
 
 const router = Router()
 
-// Cloudinary config if present
 const hasCloud = !!process.env.CLOUDINARY_URL || (
   process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
 )
@@ -38,20 +37,27 @@ const upload = multer({
 router.post('/', requireAuth, upload.single('file'), async (req, res) => {
   try {
     const inventoryId = (req.query.inventoryId || req.body.inventoryId || '').toString().trim()
+    const scope = (req.query.scope || req.body.scope || 'item').toString() // 'item' | 'inventory'
     if (!inventoryId) return res.status(400).json({ error: 'Missing inventoryId' })
 
     const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
     if (!inv) return res.status(404).json({ error: 'Inventory not found' })
-    if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Owner/Admin only' })
+
+    // permissions:
+    // - inventory images => owner/admin only
+    // - item images      => anyone who can write (public-write or explicit access)
+    if (scope === 'inventory') {
+      if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Owner/Admin only' })
+    } else {
+      const acl = await prisma.inventoryAccess.findMany({ where: { inventoryId } })
+      if (!canWriteInventory(req.user, inv, acl)) return res.status(403).json({ error: 'Forbidden' })
+    }
 
     if (hasCloud) {
       const stream = cloudinary.uploader.upload_stream(
         { folder: `inventory/${inventoryId}`, resource_type: 'image' },
         (err, result) => {
-          if (err) {
-            console.error('[cloudinary]', err)
-            return res.status(500).json({ error: 'Upload failed' })
-          }
+          if (err) return res.status(500).json({ error: 'Upload failed' })
           return res.json({ url: result.secure_url })
         }
       )
@@ -59,7 +65,6 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       return
     }
 
-    // Fallback: local FS
     const ts = Date.now()
     const safe = (req.file.originalname || 'file').replace(/[^a-z0-9_.-]/gi, '_')
     const filename = `${ts}_${safe}`

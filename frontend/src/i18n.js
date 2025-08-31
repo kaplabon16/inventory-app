@@ -70,6 +70,8 @@ const resources = {
       cancel: "Cancel",
       dark: "Dark",
       light: "Light",
+      required: "Required",
+      images: "Images",
     },
   },
   bn: {
@@ -139,6 +141,8 @@ const resources = {
       cancel: "বাতিল",
       dark: "ডার্ক",
       light: "লাইট",
+      required: "আবশ্যক",
+      images: "ছবিগুলো",
     },
   },
 }
