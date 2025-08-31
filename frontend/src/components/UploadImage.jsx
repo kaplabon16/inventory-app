@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import api from "../api/client"
 
 export default function UploadImage({
@@ -6,11 +6,13 @@ export default function UploadImage({
   onChange,
   label = "Image",
   inventoryId = "",
-  canWrite = false, // ✅ NEW: control visibility of upload actions
+  canWrite = false,
+  scope = "item", // "item" | "inventory" -> affects backend permission
 }) {
   const fileRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState("")
+  const [viewer, setViewer] = useState(false)
 
   const pick = () => fileRef.current?.click()
 
@@ -28,9 +30,10 @@ export default function UploadImage({
       const form = new FormData()
       form.append("file", f)
       form.append("inventoryId", inventoryId)
+      form.append("scope", scope)
       const { data } = await api.post("/api/upload", form, {
         headers: { "Content-Type": "multipart/form-data" },
-        params: { inventoryId },
+        params: { inventoryId, scope },
       })
       onChange?.(data.url)
     } catch (e) {
@@ -44,15 +47,26 @@ export default function UploadImage({
   const pasteUrl = async () => {
     const u = prompt("Paste image URL")
     if (!u) return
-    onChange?.(u.trim())
+    const url = u.trim()
+    if (!/^https?:\/\//i.test(url)) {
+      setErr("Please enter a valid http(s) URL.")
+      return
+    }
+    onChange?.(url)
   }
+
+  // full-screen viewer close with ESC
+  useEffect(() => {
+    const onEsc = (e) => { if (e.key === 'Escape') setViewer(false) }
+    if (viewer) window.addEventListener('keydown', onEsc)
+    return () => window.removeEventListener('keydown', onEsc)
+  }, [viewer])
 
   return (
     <div className="grid gap-2">
       <div className="flex items-center gap-2">
         <span className="text-sm">{label}</span>
 
-        {/* ✅ Hide upload controls unless user can write */}
         {canWrite && (
           <>
             <button
@@ -74,17 +88,6 @@ export default function UploadImage({
             </button>
           </>
         )}
-
-        {value && (
-          <a
-            href={value}
-            target="_blank"
-            rel="noreferrer"
-            className="text-sm text-blue-600"
-          >
-            open
-          </a>
-        )}
       </div>
 
       {err && <div className="text-sm text-red-600">{err}</div>}
@@ -99,7 +102,35 @@ export default function UploadImage({
 
       {value && (
         <div className="mt-1">
-          <img src={value} alt="" className="border rounded max-h-40" />
+          <img
+            src={value}
+            alt=""
+            className="border rounded max-h-40 cursor-zoom-in"
+            onClick={() => setViewer(true)}
+          />
+        </div>
+      )}
+
+      {/* Fullscreen lightbox */}
+      {viewer && value && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80"
+          onClick={() => setViewer(false)}
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute px-3 py-1 text-sm text-black bg-white rounded top-4 right-4"
+            onClick={(e) => { e.stopPropagation(); setViewer(false) }}
+          >
+            ✕ Close
+          </button>
+          <img
+            src={value}
+            alt=""
+            className="max-h-[90vh] max-w-[90vw] rounded shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
         </div>
       )}
     </div>
