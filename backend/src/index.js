@@ -1,4 +1,4 @@
-
+// backend/src/index.js
 import 'dotenv/config'
 import express from 'express'
 import cookieParser from 'cookie-parser'
@@ -8,9 +8,9 @@ import cors from 'cors'
 import path from 'path'
 import fs from 'fs'
 import bcrypt from 'bcrypt'
-import { PrismaClient } from '@prisma/client'
 import corsCfg from './config/cors.js'
 import { optionalAuth } from './middleware/auth.js'
+import { prisma } from './services/prisma.js'   // ✅ use shared prisma
 
 // Routes
 import authRoutes from './routes/authRoutes.js'
@@ -21,7 +21,6 @@ import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
 import uploadRoutes from './routes/uploadRoutes.js'
 
-const prisma = new PrismaClient()
 const app = express()
 
 // trust proxy for Railway so secure cookies work
@@ -66,7 +65,6 @@ app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.origi
 // Errors — make sure CORS still applies
 app.use((err, _req, res, _next) => {
   console.error('[server error]', err)
-  // reflect credentials-safe CORS headers even on error
   res.setHeader('Vary','Origin')
   res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
@@ -80,13 +78,7 @@ async function ensureDefaultAdmin() {
 
   if (!existing) {
     await prisma.user.create({
-      data: {
-        email: adminEmail,
-        name: 'Admin',
-        password: hash,
-        roles: ['ADMIN'],
-        blocked: false,
-      }
+      data: { email: adminEmail, name: 'Admin', password: hash, roles: ['ADMIN'], blocked: false }
     })
     console.log(`[bootstrap] Created default admin ${adminEmail}`)
   } else if (!existing.roles?.includes('ADMIN')) {
@@ -101,11 +93,7 @@ async function ensureDefaultAdmin() {
 async function seedCategories() {
   const names = ['Equipment', 'Supplies', 'Vehicles', 'Furniture', 'Other']
   for (const name of names) {
-    await prisma.category.upsert({
-      where: { name },
-      update: {},
-      create: { name }
-    })
+    await prisma.category.upsert({ where: { name }, update: {}, create: { name } })
   }
   console.log('[seed] Categories ensured')
 }
