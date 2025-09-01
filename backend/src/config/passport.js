@@ -1,13 +1,13 @@
 import passport from 'passport'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { Strategy as GitHubStrategy } from 'passport-github2'
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../services/prisma.js' // ✅ use shared Prisma client
 
 export function configurePassport() {
   const {
-    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK,
+    GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK
+  } = process.env
+  const {
     GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GITHUB_CALLBACK
   } = process.env
 

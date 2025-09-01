@@ -520,10 +520,8 @@ export default function InventoryPage() {
                           placeholder="e.g. 0001, 000001"
                           value={cur.param || '0001'}
                           onChange={(e) => {
-                            const v = e.target.value.replace(/[^0]/g,'').length > 0
-                              ? e.target.value.replace(/[^0]/g,'') + '1'.repeat(1) // allow zeros pattern like 0001
-                              : (e.target.value || '0001')
-                            updateElem(selIdx, { param: e.target.value || '0001' })
+                            const v = e.target.value || '0001'
+                            updateElem(selIdx, { param: v })
                           }}
                           onBlur={(e)=>{ if(!e.target.value) updateElem(selIdx,{param:'0001'}) }}
                           disabled={!canEdit}
@@ -713,9 +711,6 @@ export default function InventoryPage() {
           )}
         </div>
       )}
-
-      {tab === 'access' && (<AccessTab id={id} canEdit={canEdit} />)}
-      {tab === 'discussion' && <DiscussionTab id={id} />}
 
       {tab === 'stats' && (
         <div className="grid gap-3 mt-3">
