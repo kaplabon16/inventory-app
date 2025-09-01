@@ -1,3 +1,4 @@
+// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -203,7 +204,7 @@ export default function InventoryPage() {
 
   const removeField = (k, idx) => {
     const next = { ...fields }
-    next[k] = [...(next[k] || [])]
+    next[k] = [...(next[k] || [])] 
     next[k].splice(idx, 1)
     setFields(next)
 
@@ -713,13 +714,7 @@ export default function InventoryPage() {
       )}
 
       {tab === 'stats' && (
-        <div className="grid gap-3 mt-3">
-          {!stats ? <div className="p-4">Loading…</div> : (
-            <>
-              <div className="p-3 border rounded"><b>Items total:</b> {stats.count}</div>
-            </>
-          )}
-        </div>
+        <StatsTab stats={stats} reload={loadStats} />
       )}
 
       {showAdd && (
@@ -862,6 +857,142 @@ function DiscussionTab({ id }) {
       <div className="flex gap-2">
         <input value={txt} onChange={(e) => setTxt(e.target.value)} className="flex-1 px-2 py-1 border rounded" placeholder="Write a comment…" />
         <button onClick={post} className="px-3 py-1 text-sm border rounded">Post</button>
+      </div>
+    </div>
+  )
+}
+
+/* -------------------- Stats Tab -------------------- */
+function StatsTab({ stats, reload }) {
+  useEffect(() => {
+    if (!stats) reload?.()
+  }, []) // eslint-disable-line
+
+  if (!stats) return <div className="p-4">Loading…</div>
+
+  const n = (x, digits = 2) => (x == null ? '—' : Number(x).toLocaleString(undefined, { maximumFractionDigits: digits }))
+  const nonEmptyNums = [
+    ['num1', stats.numbers?.num1],
+    ['num2', stats.numbers?.num2],
+    ['num3', stats.numbers?.num3],
+  ].filter(([, obj]) => obj && (obj.min != null || obj.max != null || obj.avg != null || obj.median != null))
+
+  const maxTimeline = Math.max(0, ...((stats.timeline || []).map(r => Number(r.count) || 0)))
+
+  return (
+    <div className="grid gap-4 mt-3">
+      {/* Top cards */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="p-4 border rounded">
+          <div className="text-sm text-gray-500">Items total</div>
+          <div className="mt-1 text-2xl font-semibold">{n(stats.count, 0)}</div>
+        </div>
+        <div className="p-4 border rounded">
+          <div className="text-sm text-gray-500">Likes total</div>
+          <div className="mt-1 text-2xl font-semibold">{n(stats.likes, 0)}</div>
+        </div>
+      </div>
+
+      {/* Numeric fields */}
+      <div className="p-4 border rounded">
+        <div className="mb-2 font-medium">Numeric fields</div>
+        {nonEmptyNums.length === 0 ? (
+          <div className="text-gray-500">No numeric data.</div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 dark:bg-gray-800">
+                <tr>
+                  <th className="p-2 text-left">Field</th>
+                  <th className="p-2 text-left">Min</th>
+                  <th className="p-2 text-left">Median</th>
+                  <th className="p-2 text-left">Mean</th>
+                  <th className="p-2 text-left">Max</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nonEmptyNums.map(([key, obj]) => (
+                  <tr key={key} className="border-t">
+                    <td className="p-2">{key.toUpperCase()}</td>
+                    <td className="p-2">{n(obj.min)}</td>
+                    <td className="p-2">{n(obj.median)}</td>
+                    <td className="p-2">{n(obj.avg)}</td>
+                    <td className="p-2">{n(obj.max)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* String fields top values */}
+      <div className="p-4 border rounded">
+        <div className="mb-2 font-medium">Top text values</div>
+        {(stats.strings || []).length === 0 ? (
+          <div className="text-gray-500">No frequent values.</div>
+        ) : (
+          <ul className="divide-y">
+            {stats.strings.map((r, i) => (
+              <li key={`${r.value}-${i}`} className="flex items-center justify-between py-2">
+                <span className="truncate">{r.value}</span>
+                <span className="text-sm text-gray-600">{n(r.count, 0)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Timeline */}
+      <div className="p-4 border rounded">
+        <div className="mb-2 font-medium">Created timeline (items per month)</div>
+        {(stats.timeline || []).length === 0 ? (
+          <div className="text-gray-500">No timeline data.</div>
+        ) : (
+          <div className="space-y-2">
+            {stats.timeline.map((r) => {
+              const w = maxTimeline ? Math.max(2, Math.round((Number(r.count) / maxTimeline) * 100)) : 0
+              return (
+                <div key={r.month} className="flex items-center gap-3">
+                  <div className="w-20 text-xs text-gray-600">{r.month}</div>
+                  <div className="flex-1 h-3 bg-gray-100 rounded dark:bg-gray-800">
+                    <div className="h-3 bg-gray-400 rounded dark:bg-gray-600" style={{ width: `${w}%` }} />
+                  </div>
+                  <div className="w-10 text-xs text-right">{n(r.count, 0)}</div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Contributors */}
+      <div className="p-4 border rounded">
+        <div className="mb-2 font-medium">Top contributors</div>
+        {(stats.contributors || []).length === 0 ? (
+          <div className="text-gray-500">No contributors.</div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100 dark:bg-gray-800">
+                <tr>
+                  <th className="p-2 text-left">Name</th>
+                  <th className="p-2 text-left">Email</th>
+                  <th className="p-2 text-left">Items</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stats.contributors.map((c, i) => (
+                  <tr key={`${c.email}-${i}`} className="border-t">
+                    <td className="p-2">{c.name}</td>
+                    <td className="p-2">{c.email}</td>
+                    <td className="p-2">{n(c.count, 0)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
