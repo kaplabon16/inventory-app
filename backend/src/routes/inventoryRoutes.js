@@ -540,6 +540,7 @@ router.get('/:id/stats', async (req, res) => {
       WHERE "inventoryId" = ${id}
     `
 
+    // top N (5) string values across TEXT and MTEXT fields
     const topStrings = await prisma.$queryRaw`
       WITH t AS (
         SELECT lower(trim(text1)) AS v FROM "Item" WHERE "inventoryId"=${id} AND text1 IS NOT NULL AND trim(text1) <> ''
