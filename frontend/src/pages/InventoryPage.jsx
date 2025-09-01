@@ -43,6 +43,11 @@ export default function InventoryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newType, setNewType] = useState('text')
 
+  // Custom ID builder state
+  const [elements, setElements] = useState([])   // [{order,type,param?}]
+  const [savedElements, setSavedElements] = useState([])
+  const [selIdx, setSelIdx] = useState(-1)
+
   // 🔔 keep hooks before any conditional return
   const [dragIndex, setDragIndex] = useState(-1)
 
@@ -70,10 +75,18 @@ export default function InventoryPage() {
       })
       const flat = Array.isArray(data?.fieldsFlat) ? data.fieldsFlat : []
       setOrder(flat.map(f => ({ group: f.group, slot: f.slot })))
+
+      // custom id elements
+      const els = Array.isArray(data?.elements) ? data.elements : []
+      setElements(els)
+      setSavedElements(els)
+      setSelIdx(-1)
     } catch (e) {
       setLoadErr('Failed to load inventory.')
       setInv(null)
       setItems([])
+      setElements([])
+      setSavedElements([])
     }
 
     try {
@@ -95,9 +108,9 @@ export default function InventoryPage() {
   }
   useEffect(() => { if (tab === 'stats') loadStats() }, [tab])
 
-  const idPreview = useMemo(() => renderIdPreview([]), []) // not used here, keep stable
+  // ---------- ID Preview (live, safe — doesn't advance DB sequence) ----------
+  const idPreview = useMemo(() => renderIdPreview(elements || []), [elements])
 
-  // ⬇️ Build current flat list for the reorder UI from {fields} + {order}
   const currentFlat = useMemo(() => {
     const titleFor = (g, s) => {
       const key = g === 'NUMBER' ? 'num'
@@ -110,11 +123,10 @@ export default function InventoryPage() {
     return order.map(o => ({ ...o, label: titleFor(o.group, o.slot) }))
   }, [order, fields])
 
-  // ✅ early returns come AFTER all hooks
   if (loadErr) return <div className="p-6 text-red-600">{loadErr}</div>
   if (!inv) return <div className="p-6">Loading…</div>
 
-  // ------- TABLE COLUMNS (respect Show in Table, includes images only if shown) -------
+  // ------- TABLE COLUMNS -------
   const itemCols = [
     { key: 'customId', title: 'ID', render: (v, r) => <Link to={user ? `/inventories/${id}/item/${r.id}` : '#'} className="text-blue-600">{v}</Link> },
     ...(['text','num','bool'].flatMap((g) =>
@@ -180,7 +192,6 @@ export default function InventoryPage() {
     next[k] = [...(next[k] || []), { title: '', desc: '', show: false }]
     setFields(next)
 
-    // also append to end of `order` in current view
     const type = k === 'num' ? 'NUMBER' :
                  k === 'text' ? 'TEXT' :
                  k === 'mtext' ? 'MTEXT' :
@@ -196,7 +207,6 @@ export default function InventoryPage() {
     next[k].splice(idx, 1)
     setFields(next)
 
-    // Rebuild order by stripping any entries for the removed slot and shifting slots > idx
     const type = k === 'num' ? 'NUMBER' :
                  k === 'text' ? 'TEXT' :
                  k === 'mtext' ? 'MTEXT' :
@@ -208,7 +218,6 @@ export default function InventoryPage() {
     setOrder(filtered)
   }
 
-  // Drag & drop reorder across ALL fields using fieldsFlat order mirror (order[])
   const onDragStart = (i) => (e) => { setDragIndex(i); e.dataTransfer.effectAllowed = 'move' }
   const onDragOver = (i) => (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
   const onDrop = (i) => (e) => {
@@ -229,6 +238,67 @@ export default function InventoryPage() {
     } catch {
       toast('Failed to save fields')
     }
+  }
+
+  // ======== CUSTOM ID BUILDER ========
+
+  const addElem = (type) => {
+    const t = type.toUpperCase()
+    const defaults = {
+      FIXED: { type: 'FIXED', param: '' },
+      RAND20: { type: 'RAND20' },
+      RAND32: { type: 'RAND32' },
+      RAND6: { type: 'RAND6' },
+      RAND9: { type: 'RAND9' },
+      GUID: { type: 'GUID' },
+      DATE: { type: 'DATE', param: 'YYMM' },
+      SEQ:  { type: 'SEQ',  param: '0001' }, // min width & leading zeros
+    }[t]
+    const next = [...elements, { order: elements.length + 1, ...(defaults || { type: 'FIXED', param: '' }) }]
+    setElements(next)
+    setSelIdx(next.length - 1)
+  }
+
+  const moveElem = (from, to) => {
+    if (from === to || from < 0 || to < 0 || from >= elements.length || to >= elements.length) return
+    const next = [...elements]
+    const [m] = next.splice(from, 1)
+    next.splice(to, 0, m)
+    // normalize order 1..N
+    next.forEach((e, i) => { e.order = i + 1 })
+    setElements(next)
+    setSelIdx(to)
+  }
+
+  const removeElem = (idx) => {
+    const next = elements.filter((_, i) => i !== idx).map((e, i) => ({ ...e, order: i + 1 }))
+    setElements(next)
+    setSelIdx(-1)
+  }
+
+  const updateElem = (idx, patch) => {
+    const next = elements.map((e, i) => i === idx ? { ...e, ...patch } : e)
+    setElements(next)
+  }
+
+  const resetElems = () => { setElements(savedElements); setSelIdx(-1) }
+
+  const saveElems = async () => {
+    try {
+      const payload = elements.map((e, i) => ({ order: i + 1, type: e.type, param: e.param ?? null }))
+      const { data } = await api.post(`/api/inventories/${id}/custom-id`, { elements: payload })
+      setSavedElements(data.elements || payload)
+      toast('Saved ID format')
+    } catch {
+      toast('Failed to save ID format')
+    }
+  }
+
+  const testGenerateMany = () => {
+    // Front-end preview — doesn’t increment real sequence
+    const samples = []
+    for (let i = 0; i < 5; i++) samples.push(renderIdPreview(elements || []))
+    return samples
   }
 
   return (
@@ -347,12 +417,140 @@ export default function InventoryPage() {
       )}
 
       {tab === 'customId' && (
-        <div className="grid gap-3 mt-3">
-          <div><b>Preview:</b> <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview}</code></div>
-          <div className="text-sm text-gray-500">ID Elements</div>
-          <div className="text-sm text-gray-500">Use the existing Custom ID tab UI.</div>
+        <div className="grid gap-4 mt-4">
+          <div className="p-3 border rounded">
+            <div className="flex items-center justify-between">
+              <div className="font-medium">Custom Inventory Number (ID Builder)</div>
+              <div className="text-sm">
+                <b>Preview:</b>{' '}
+                <code className="px-2 py-1 bg-gray-100 rounded dark:bg-gray-800">{idPreview || '(empty)'}</code>
+              </div>
+            </div>
+          </div>
+
+          {/* Palette */}
+          <div className="p-3 border rounded">
+            <div className="mb-2 font-medium">Palette</div>
+            <div className="flex flex-wrap gap-2">
+              {['FIXED','DATE','SEQ','RAND6','RAND9','RAND20','RAND32','GUID'].map(t => (
+                <button
+                  key={t}
+                  className="px-2 py-1 text-sm border rounded"
+                  onClick={() => addElem(t)}
+                  disabled={!canEdit}
+                  title={`Add ${t}`}
+                >
+                  + {t}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Canvas */}
+          <div className="p-3 border rounded">
+            <div className="mb-2 font-medium">Canvas (drag to reorder)</div>
+            <ul className="border divide-y rounded">
+              {(elements || []).map((e, i) => (
+                <li
+                  key={`${e.type}-${i}`}
+                  className={`flex items-center justify-between gap-3 px-3 py-2 ${selIdx===i ? 'bg-gray-50 dark:bg-gray-800' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <button className="cursor-grab" title="Drag up" onClick={() => moveElem(i, Math.max(0, i-1))}>↑</button>
+                    <button className="cursor-grab" title="Drag down" onClick={() => moveElem(i, Math.min(elements.length-1, i+1))}>↓</button>
+                    <button className="px-2 py-1 text-xs border rounded" onClick={() => setSelIdx(i)}>Select</button>
+                    <span className="w-20 text-sm text-gray-500">#{i+1}</span>
+                    <span className="font-mono">{e.type}</span>
+                    {e.param ? <span className="ml-2 text-xs text-gray-600">({e.param})</span> : null}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button className="px-2 py-1 text-sm border rounded" onClick={() => removeElem(i)} disabled={!canEdit}>Remove</button>
+                  </div>
+                </li>
+              ))}
+              {(!elements || elements.length === 0) && (
+                <li className="px-3 py-4 text-center text-gray-500">No elements yet — add from the palette</li>
+              )}
+            </ul>
+          </div>
+
+          {/* Config panel */}
+          <div className="p-3 border rounded">
+            <div className="mb-2 font-medium">Element config</div>
+            {selIdx < 0 || !elements[selIdx] ? (
+              <div className="p-3 text-gray-500">Select an element to configure</div>
+            ) : (
+              <>
+                <div className="mb-2 text-sm">Selected: <b>{elements[selIdx].type}</b></div>
+                {(() => {
+                  const cur = elements[selIdx]
+                  if (cur.type === 'FIXED') {
+                    return (
+                      <label className="grid max-w-sm gap-1">
+                        <span>Value (text / separators)</span>
+                        <input
+                          className="px-2 py-1 border rounded"
+                          value={cur.param || ''}
+                          onChange={(e) => updateElem(selIdx, { param: e.target.value })}
+                          disabled={!canEdit}
+                        />
+                      </label>
+                    )
+                  }
+                  if (cur.type === 'DATE') {
+                    return (
+                      <label className="grid max-w-sm gap-1">
+                        <span>Format (dayjs format)</span>
+                        <input
+                          className="px-2 py-1 border rounded"
+                          placeholder="e.g. YYMM, YYYYMMDD, YYYY-MM"
+                          value={cur.param || 'YYMM'}
+                          onChange={(e) => updateElem(selIdx, { param: e.target.value || 'YYMM' })}
+                          disabled={!canEdit}
+                        />
+                      </label>
+                    )
+                  }
+                  if (cur.type === 'SEQ') {
+                    return (
+                      <label className="grid max-w-sm gap-1">
+                        <span>Width (leading zeros)</span>
+                        <input
+                          className="px-2 py-1 border rounded"
+                          placeholder="e.g. 0001, 000001"
+                          value={cur.param || '0001'}
+                          onChange={(e) => {
+                            const v = e.target.value.replace(/[^0]/g,'').length > 0
+                              ? e.target.value.replace(/[^0]/g,'') + '1'.repeat(1) // allow zeros pattern like 0001
+                              : (e.target.value || '0001')
+                            updateElem(selIdx, { param: e.target.value || '0001' })
+                          }}
+                          onBlur={(e)=>{ if(!e.target.value) updateElem(selIdx,{param:'0001'}) }}
+                          disabled={!canEdit}
+                        />
+                        <div className="text-xs text-gray-500">Use a mask like <code>0001</code> to set minimum width.</div>
+                      </label>
+                    )
+                  }
+                  // RAND/GUID have no extra config
+                  return <div className="text-sm text-gray-500">No options for {cur.type}</div>
+                })()}
+              </>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="px-3 py-1 text-sm border rounded" onClick={saveElems} disabled={!canEdit}>Save format</button>
+            <button className="px-3 py-1 text-sm border rounded" onClick={resetElems} disabled={!canEdit}>Reset</button>
+            <button className="px-3 py-1 text-sm border rounded" onClick={() => alert(testGenerateMany().join('\n'))}>Test generate</button>
+            <div className="text-sm text-gray-500">Uniqueness enforced per inventory; changing format doesn’t rewrite existing items.</div>
+          </div>
         </div>
       )}
+
+      {tab === 'access' && (<AccessTab id={id} canEdit={canEdit} />)}
+      {tab === 'discussion' && <DiscussionTab id={id} />}
 
       {tab === 'fields' && (
         <div className="grid gap-6 mt-4">
@@ -365,7 +563,6 @@ export default function InventoryPage() {
             )}
           </div>
 
-          {/* Reorder panel */}
           <div className="p-3 border rounded">
             <div className="mb-2 font-medium">Reorder (drag to change)</div>
             <ul className="border divide-y rounded">
@@ -373,9 +570,9 @@ export default function InventoryPage() {
                 <li
                   key={`${f.group}-${f.slot}-${i}`}
                   draggable={canWrite}
-                  onDragStart={onDragStart(i)}
-                  onDragOver={onDragOver(i)}
-                  onDrop={onDrop(i)}
+                  onDragStart={(e)=>{ setDragIndex(i); e.dataTransfer.effectAllowed='move' }}
+                  onDragOver={(e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move' }}
+                  onDrop={(e)=>{ e.preventDefault(); if (dragIndex<0 || dragIndex===i) return; const next=[...order]; const [m]=next.splice(dragIndex,1); next.splice(i,0,m); setOrder(next); setDragIndex(-1) }}
                   className="flex items-center justify-between gap-3 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   <div className="flex items-center gap-3">
@@ -391,7 +588,6 @@ export default function InventoryPage() {
             </ul>
           </div>
 
-          {/* Edit per group */}
           {(['text', 'mtext', 'num', 'link', 'bool', 'image']).map((group) => (
             <div key={group} className="p-3 border rounded">
               <div className="mb-2 font-medium">{groupLabels[group]}</div>
@@ -444,7 +640,6 @@ export default function InventoryPage() {
                           next[group] = arr
                           setFields(next)
 
-                          // fix order mirror: swap the two entries with that group+slot
                           const type = group === 'num' ? 'NUMBER' :
                                        group === 'text' ? 'TEXT' :
                                        group === 'mtext' ? 'MTEXT' :
@@ -527,13 +722,11 @@ export default function InventoryPage() {
           {!stats ? <div className="p-4">Loading…</div> : (
             <>
               <div className="p-3 border rounded"><b>Items total:</b> {stats.count}</div>
-              {/* (rest same as before) */}
             </>
           )}
         </div>
       )}
 
-      {/* Simple “Add Field” popover */}
       {showAdd && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
           <div className="w-full max-w-sm p-4 bg-white rounded shadow dark:bg-gray-900">

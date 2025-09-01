@@ -9,7 +9,7 @@ router.use(optionalAuth)
 
 const setNoStore = (res) => res.set('Cache-Control', 'no-store, max-age=0')
 
-/* ---------------- LISTS (unchanged) ---------------- */
+/* ---------------- LISTS ---------------- */
 
 router.get('/public-recent', async (req, res) => {
   setNoStore(res)
@@ -119,7 +119,6 @@ router.post('/', requireAuth, async (req, res) => {
 /* ---------------- READ ONE (PUBLIC) ---------------- */
 
 function typeLabelToKey(t) {
-  // DB enum -> UI key
   switch (t) {
     case 'TEXT': return 'text'
     case 'MTEXT': return 'mtext'
@@ -144,7 +143,6 @@ router.get('/:id', async (req, res) => {
     prisma.inventoryAccess.findMany({ where: { inventoryId: inv.id } }),
   ])
 
-  // Build grouped arrays ONLY for existing fields; no placeholders.
   const grouped = { text: [], mtext: [], num: [], link: [], bool: [], image: [] }
   fields.sort((a, b) => a.slot - b.slot).forEach(f => {
     const key = typeLabelToKey(f.type)
@@ -157,18 +155,16 @@ router.get('/:id', async (req, res) => {
     }
   })
 
-  // Flat order to render (includes images)
   const typeOrder = { TEXT: 1, MTEXT: 2, NUMBER: 3, LINK: 4, BOOL: 5, IMAGE: 6 }
   const fieldsFlat = fields
     .map(f => ({
-      group: f.type,              // DB enum used by item page
+      group: f.type,
       slot: f.slot,
       title: f.title,
       order: f.displayOrder ?? 0
     }))
     .sort((a, b) => (a.order - b.order) || (typeOrder[a.group] - typeOrder[b.group]) || (a.slot - b.slot))
 
-  // Items (unchanged)
   const items = await prisma.item.findMany({
     where: { inventoryId: inv.id },
     orderBy: { createdAt: 'desc' }, take: 100,
@@ -238,20 +234,16 @@ router.delete('/:id', requireAuth, async (req, res) => {
 /* ---------------- FIELDS ---------------- */
 
 router.post('/:id/fields', requireAuth, async (req, res) => {
-  // Writers (publicWrite or explicit access) may change field config
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
 
   const access = await prisma.inventoryAccess.findMany({ where: { inventoryId: inv.id } })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-  // Expect: { fields: { text:[], mtext:[], num:[], link:[], bool:[], image:[] }, order: [{group,slot}] }
   const { fields = {}, order = [] } = req.body || {}
-
   const groups = ['text','mtext','num','link','bool','image']
   const typeMap = { text: 'TEXT', mtext: 'MTEXT', num: 'NUMBER', link: 'LINK', bool: 'BOOL', image: 'IMAGE' }
 
-  // Build a map: `${TYPE}-${slot}` -> displayOrder index
   const orderMap = {}
   order.forEach((x, idx) => {
     const type = typeof x.group === 'string' ? x.group.toUpperCase() : ''
@@ -259,13 +251,11 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   })
 
   const tx = []
-
-  // Upsert existing + new, and re-number slots per group sequentially
   groups.forEach(group => {
     const type = typeMap[group]
     const arr = Array.isArray(fields[group]) ? fields[group] : []
     arr.forEach((cfg, i) => {
-      const slot = i + 1 // normalize slots 1..N without gaps
+      const slot = i + 1
       const key = `${type}-${slot}`
       const displayOrder = orderMap[key] ?? 9999
       tx.push(prisma.inventoryField.upsert({
@@ -274,18 +264,16 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
         create: { inventoryId: inv.id, type, slot, title: cfg.title || '', description: cfg.desc || '', showInTable: !!cfg.show, displayOrder }
       }))
     })
-    // delete any leftover slots > current length
     tx.push(prisma.inventoryField.deleteMany({
       where: { inventoryId: inv.id, type, slot: { gt: arr.length } }
     }))
   })
 
   await prisma.$transaction(tx)
-
   res.json({ ok: true, message: 'Saved field config' })
 })
 
-/* ---------------- CUSTOM ID ELEMENTS (unchanged) ---------------- */
+/* ---------------- CUSTOM ID ELEMENTS ---------------- */
 
 router.post('/:id/custom-id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -378,14 +366,47 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   })
 })
 
+/* -------------- IMPORTANT FIX: sanitize item updates -------------- */
 router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   const { inv, access } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-  const data = (({ customId, ...rest }) => ({ ...rest, customId: customId || undefined }))(req.body || {})
-  const updated = await prisma.item.update({ where: { id: req.params.itemId }, data })
-  res.json(updated)
+  const allow = new Set([
+    'customId',
+    'text1','text2','text3',
+    'mtext1','mtext2','mtext3',
+    'num1','num2','num3',
+    'link1','link2','link3',
+    'bool1','bool2','bool3',
+    'img1','img2','img3'
+  ])
+
+  const body = req.body || {}
+
+  const clean = {}
+  for (const k of Object.keys(body)) {
+    if (!allow.has(k)) continue
+    if (k.startsWith('num')) {
+      const v = body[k]
+      const n = (v === '' || v === null || v === undefined) ? null : Number(v)
+      clean[k] = Number.isFinite(n) ? n : null
+    } else if (k.startsWith('bool')) {
+      const v = body[k]
+      clean[k] = (v === true || v === false) ? v : (!!v ? true : false)
+    } else if (k.startsWith('text') || k.startsWith('mtext') || k.startsWith('link') || k.startsWith('img') || k === 'customId') {
+      const v = body[k]
+      clean[k] = (v === undefined) ? undefined : (v === null ? null : String(v))
+    }
+  }
+
+  try {
+    const updated = await prisma.item.update({ where: { id: req.params.itemId }, data: clean })
+    res.json(updated)
+  } catch (e) {
+    console.error('[item update]', e)
+    res.status(400).json({ error: 'Update failed' })
+  }
 })
 
 router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
@@ -397,7 +418,7 @@ router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---------------- LIKE / COMMENTS / ACCESS (unchanged) ---------------- */
+/* ---------------- LIKE / COMMENTS / ACCESS ---------------- */
 
 router.post('/:id/items/:itemId/like', requireAuth, async (req, res) => {
   const { inv } = await getInvWithAccess(req.params.id)
@@ -483,7 +504,7 @@ router.delete('/:id/access/:userId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---------------- STATS (unchanged) ---------------- */
+/* ---------------- STATS ---------------- */
 
 router.get('/:id/stats', async (req, res) => {
   try {
