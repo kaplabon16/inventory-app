@@ -44,29 +44,40 @@ function bearerOrCookie(req) {
 // Helper function to create or find OAuth user
 async function findOrCreateOAuthUser(profile, provider) {
   try {
+    const email = profile.emails?.[0]?.value
+    if (!email) {
+      throw new Error('No email provided by OAuth provider')
+    }
+
     // First try to find by email
     let user = await prisma.user.findUnique({ 
-      where: { email: profile.emails[0].value }
+      where: { email }
     })
 
     if (!user) {
       // Create new user if not found
       user = await prisma.user.create({
         data: {
-          email: profile.emails[0].value,
+          email,
           name: profile.displayName || profile.username || 'Unknown User',
+          avatar: profile.photos?.[0]?.value || null,
+          provider,
+          providerId: profile.id,
           roles: [],
           blocked: false,
           // Don't set password for OAuth users
-          [`${provider}Id`]: profile.id
         }
       })
     } else {
-      // Update OAuth ID if user exists but doesn't have it
-      if (!user[`${provider}Id`]) {
+      // Update OAuth provider info if user exists but doesn't have it
+      if (!user.provider || !user.providerId) {
         user = await prisma.user.update({
           where: { id: user.id },
-          data: { [`${provider}Id`]: profile.id }
+          data: { 
+            provider,
+            providerId: profile.id,
+            avatar: profile.photos?.[0]?.value || user.avatar
+          }
         })
       }
     }
