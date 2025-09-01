@@ -1,3 +1,4 @@
+// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -300,6 +301,12 @@ export default function InventoryPage() {
     for (let i = 0; i < 5; i++) samples.push(renderIdPreview(elements || []))
     return samples
   }
+
+  // ======== STATS HELPERS ========
+  const nfmt = (x, digits = 2) => (x == null || Number.isNaN(Number(x)) ? '—' : Number(x).toFixed(digits))
+  const ifAny = (n, node) => (n && n > 0 ? node : null)
+  const safeList = (a) => Array.isArray(a) ? a : []
+  const maxCount = useMemo(() => Math.max(1, ...safeList(stats?.timeline).map(r => Number(r.count) || 0)), [stats])
 
   return (
     <div className="max-w-6xl p-4 mx-auto">
@@ -713,10 +720,120 @@ export default function InventoryPage() {
       )}
 
       {tab === 'stats' && (
-        <div className="grid gap-3 mt-3">
-          {!stats ? <div className="p-4">Loading…</div> : (
+        <div className="grid gap-4 mt-4">
+          {!stats ? (
+            <div className="p-4">Loading…</div>
+          ) : (
             <>
-              <div className="p-3 border rounded"><b>Items total:</b> {stats.count}</div>
+              {/* Top summary cards */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="p-4 border rounded">
+                  <div className="text-sm text-gray-500">Items total</div>
+                  <div className="text-2xl font-semibold">{stats.count ?? 0}</div>
+                </div>
+                <div className="p-4 border rounded">
+                  <div className="text-sm text-gray-500">Likes total</div>
+                  <div className="text-2xl font-semibold">{stats.likes ?? 0}</div>
+                </div>
+                {ifAny(stats?.num1?.n, (
+                  <div className="p-4 border rounded">
+                    <div className="text-sm text-gray-500">Num1 (n={stats.num1.n})</div>
+                    <div className="grid grid-cols-4 gap-2 mt-1 text-sm">
+                      <div><div className="text-gray-500">Min</div><b>{nfmt(stats.num1.min)}</b></div>
+                      <div><div className="text-gray-500">Max</div><b>{nfmt(stats.num1.max)}</b></div>
+                      <div><div className="text-gray-500">Mean</div><b>{nfmt(stats.num1.avg)}</b></div>
+                      <div><div className="text-gray-500">Median</div><b>{nfmt(stats.num1.median)}</b></div>
+                    </div>
+                  </div>
+                ))}
+                {ifAny(stats?.num2?.n, (
+                  <div className="p-4 border rounded">
+                    <div className="text-sm text-gray-500">Num2 (n={stats.num2.n})</div>
+                    <div className="grid grid-cols-4 gap-2 mt-1 text-sm">
+                      <div><div className="text-gray-500">Min</div><b>{nfmt(stats.num2.min)}</b></div>
+                      <div><div className="text-gray-500">Max</div><b>{nfmt(stats.num2.max)}</b></div>
+                      <div><div className="text-gray-500">Mean</div><b>{nfmt(stats.num2.avg)}</b></div>
+                      <div><div className="text-gray-500">Median</div><b>{nfmt(stats.num2.median)}</b></div>
+                    </div>
+                  </div>
+                ))}
+                {ifAny(stats?.num3?.n, (
+                  <div className="p-4 border rounded">
+                    <div className="text-sm text-gray-500">Num3 (n={stats.num3.n})</div>
+                    <div className="grid grid-cols-4 gap-2 mt-1 text-sm">
+                      <div><div className="text-gray-500">Min</div><b>{nfmt(stats.num3.min)}</b></div>
+                      <div><div className="text-gray-500">Max</div><b>{nfmt(stats.num3.max)}</b></div>
+                      <div><div className="text-gray-500">Mean</div><b>{nfmt(stats.num3.avg)}</b></div>
+                      <div><div className="text-gray-500">Median</div><b>{nfmt(stats.num3.median)}</b></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Top strings */}
+              <div className="grid gap-3 lg:grid-cols-2">
+                <div className="p-4 border rounded">
+                  <div className="mb-2 font-medium">Top strings (Text & Multi-line)</div>
+                  <div className="space-y-2">
+                    {safeList(stats.stringsTop).length === 0 && (
+                      <div className="text-sm text-gray-500">No data</div>
+                    )}
+                    {safeList(stats.stringsTop).map((r, i) => (
+                      <div key={`${r.v}-${i}`} className="flex items-center justify-between gap-3">
+                        <div className="truncate max-w-[70%]">{r.v}</div>
+                        <div className="text-sm text-gray-600">×{r.c}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Contributors */}
+                <div className="p-4 border rounded">
+                  <div className="mb-2 font-medium">Top contributors</div>
+                  <div className="space-y-2">
+                    {safeList(stats.contributors).length === 0 && (
+                      <div className="text-sm text-gray-500">No data</div>
+                    )}
+                    {safeList(stats.contributors).map((c, i) => (
+                      <div key={`${c.email}-${i}`} className="flex items-center justify-between gap-3">
+                        <div className="truncate">
+                          <span className="font-medium">{c.name || '(no name)'}</span>
+                          <span className="ml-2 text-gray-500">&lt;{c.email}&gt;</span>
+                        </div>
+                        <div className="text-sm text-gray-600">{c.count} item{c.count === 1 ? '' : 's'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Monthly timeline */}
+              <div className="p-4 border rounded">
+                <div className="mb-2 font-medium">Items by month</div>
+                {safeList(stats.timeline).length === 0 ? (
+                  <div className="text-sm text-gray-500">No data</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {safeList(stats.timeline).map((r, i) => {
+                      const c = Number(r.count) || 0
+                      const w = Math.max(6, Math.round((c / maxCount) * 100))
+                      return (
+                        <li key={`${r.month}-${i}`}>
+                          <div className="flex items-center gap-3">
+                            <div className="w-20 text-sm text-gray-600">{r.month}</div>
+                            <div className="flex-1">
+                              <div className="h-3 bg-gray-100 rounded dark:bg-gray-800">
+                                <div className="h-3 bg-gray-400 rounded dark:bg-gray-600" style={{ width: `${w}%` }} />
+                              </div>
+                            </div>
+                            <div className="w-10 text-sm text-right text-gray-600">{c}</div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
             </>
           )}
         </div>

@@ -1,3 +1,4 @@
+// backend/src/routes/inventoryRoutes.js
 import { Router } from 'express'
 import { prisma } from '../services/prisma.js'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
@@ -510,35 +511,66 @@ router.get('/:id/stats', async (req, res) => {
   try {
     const id = req.params.id
 
+    // total items
     const count = await prisma.item.count({ where: { inventoryId: id } })
 
-    const [nums] = await prisma.$queryRaw`
-      SELECT
-        AVG(num1) AS num1_avg, MIN(num1) AS num1_min, MAX(num1) AS num1_max, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num1) AS num1_med,
-        AVG(num2) AS num2_avg, MIN(num2) AS num2_min, MAX(num2) AS num2_max, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num2) AS num2_med,
-        AVG(num3) AS num3_avg, MIN(num3) AS num3_min, MAX(num3) AS num3_max, PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num3) AS num3_med
-      FROM "Item" WHERE "inventoryId" = ${id}
+    // total likes across items in this inventory
+    const [{ likes_total = 0 } = {}] = await prisma.$queryRaw`
+      SELECT COUNT(*)::int AS likes_total
+      FROM "Like" l
+      JOIN "Item" i ON i.id = l."itemId"
+      WHERE i."inventoryId" = ${id}
     `
 
-    const topText = await prisma.$queryRaw`
+    // numeric stats (min/max/avg/median) for num1..num3; median via percentile_cont
+    const [nums] = await prisma.$queryRaw`
+      SELECT
+        COUNT(num1) AS num1_n,
+        MIN(num1) AS num1_min, MAX(num1) AS num1_max, AVG(num1) AS num1_avg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num1) AS num1_med,
+
+        COUNT(num2) AS num2_n,
+        MIN(num2) AS num2_min, MAX(num2) AS num2_max, AVG(num2) AS num2_avg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num2) AS num2_med,
+
+        COUNT(num3) AS num3_n,
+        MIN(num3) AS num3_min, MAX(num3) AS num3_max, AVG(num3) AS num3_avg,
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY num3) AS num3_med
+      FROM "Item"
+      WHERE "inventoryId" = ${id}
+    `
+
+    const topStrings = await prisma.$queryRaw`
       WITH t AS (
         SELECT lower(trim(text1)) AS v FROM "Item" WHERE "inventoryId"=${id} AND text1 IS NOT NULL AND trim(text1) <> ''
         UNION ALL
         SELECT lower(trim(text2)) FROM "Item" WHERE "inventoryId"=${id} AND text2 IS NOT NULL AND trim(text2) <> ''
         UNION ALL
         SELECT lower(trim(text3)) FROM "Item" WHERE "inventoryId"=${id} AND text3 IS NOT NULL AND trim(text3) <> ''
+        UNION ALL
+        SELECT lower(trim(mtext1)) FROM "Item" WHERE "inventoryId"=${id} AND mtext1 IS NOT NULL AND trim(mtext1) <> ''
+        UNION ALL
+        SELECT lower(trim(mtext2)) FROM "Item" WHERE "inventoryId"=${id} AND mtext2 IS NOT NULL AND trim(mtext2) <> ''
+        UNION ALL
+        SELECT lower(trim(mtext3)) FROM "Item" WHERE "inventoryId"=${id} AND mtext3 IS NOT NULL AND trim(mtext3) <> ''
       )
-      SELECT v, COUNT(*) as c FROM t GROUP BY v ORDER BY c DESC, v ASC LIMIT 5
+      SELECT v, COUNT(*)::int as c
+      FROM t
+      GROUP BY v
+      ORDER BY c DESC, v ASC
+      LIMIT 5
     `
 
+    // monthly timeline (YYYY-MM)
     const timeline = await prisma.$queryRaw`
-      SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*) AS count
+      SELECT to_char(date_trunc('month', "createdAt"), 'YYYY-MM') AS month, COUNT(*)::int AS count
       FROM "Item" WHERE "inventoryId"=${id}
       GROUP BY 1 ORDER BY 1 ASC
     `
 
+    // top contributors
     const contributors = await prisma.$queryRaw`
-      SELECT u.name, u.email, COUNT(i.id) AS count
+      SELECT u.name, u.email, COUNT(i.id)::int AS count
       FROM "Item" i
       JOIN "User" u ON u.id = i."createdById"
       WHERE i."inventoryId"=${id}
@@ -551,16 +583,24 @@ router.get('/:id/stats', async (req, res) => {
 
     res.json({
       count,
-      num1: { min: num(nums?.num1_min), max: num(nums?.num1_max), avg: num(nums?.num1_avg), median: num(nums?.num1_med) },
-      num2: { min: num(nums?.num2_min), max: num(nums?.num2_max), avg: num(nums?.num2_avg), median: num(nums?.num2_med) },
-      num3: { min: num(nums?.num3_min), max: num(nums?.num3_max), avg: num(nums?.num3_avg), median: num(nums?.num3_med) },
-      topText,
+      likes: Number(likes_total || 0),
+      num1: { n: Number(nums?.num1_n || 0), min: num(nums?.num1_min), max: num(nums?.num1_max), avg: num(nums?.num1_avg), median: num(nums?.num1_med) },
+      num2: { n: Number(nums?.num2_n || 0), min: num(nums?.num2_min), max: num(nums?.num2_max), avg: num(nums?.num2_avg), median: num(nums?.num2_med) },
+      num3: { n: Number(nums?.num3_n || 0), min: num(nums?.num3_min), max: num(nums?.num3_max), avg: num(nums?.num3_avg), median: num(nums?.num3_med) },
+      stringsTop: topStrings,
       timeline,
       contributors,
     })
   } catch (e) {
     console.error('[stats]', e)
-    res.json({ count: 0, num1: {}, num2: {}, num3: {}, topText: [], timeline: [], contributors: [] })
+    res.json({
+      count: 0,
+      likes: 0,
+      num1: { n: 0 }, num2: { n: 0 }, num3: { n: 0 },
+      stringsTop: [],
+      timeline: [],
+      contributors: []
+    })
   }
 })
 
