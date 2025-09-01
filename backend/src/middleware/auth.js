@@ -1,6 +1,6 @@
+// backend/src/middleware/auth.js
 import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
-const prisma = new PrismaClient()
+import { prisma } from '../services/prisma.js' // ✅ shared Prisma client
 
 export function signToken(user) {
   const payload = { id: user.id, roles: user.roles }

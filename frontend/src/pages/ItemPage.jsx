@@ -1,3 +1,4 @@
+// frontend/src/pages/ItemPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
@@ -42,21 +43,32 @@ export default function ItemPage() {
 
   const save = async () => {
     if (!canWrite) return
-    // sanitize before sending
     const payload = { ...item }
     ;['num1','num2','num3'].forEach(k => { payload[k] = coerceNum(payload[k]) })
     try {
       await api.put(`/api/inventories/${id}/items/${itemId}`, payload)
       nav(`/inventories/${id}`, { replace: true })
-    } catch {
+    } catch (e) {
+      if (e?.response?.status === 401) {
+        window.location.assign(`/login?redirect=/inventories/${id}/item/${itemId}`)
+        return
+      }
       alert('Save failed')
       await load()
     }
   }
 
   const toggleLike = async () => {
-    const { data } = await api.post(`/api/inventories/${id}/items/${itemId}/like`)
-    setLikes(data.count)
+    try {
+      const { data } = await api.post(`/api/inventories/${id}/items/${itemId}/like`)
+      setLikes(data.count)
+    } catch (e) {
+      if (e?.response?.status === 401) {
+        window.location.assign(`/login?redirect=/inventories/${id}/item/${itemId}`)
+        return
+      }
+      alert('Failed to like')
+    }
   }
 
   if (!item || !fields) return <div className="p-6">Loading…</div>
@@ -185,7 +197,6 @@ export default function ItemPage() {
           onClick={async () => {
             if (!canWrite) return
             await api.delete(`/api/inventories/${id}/items/${itemId}`)
-       
             nav(`/inventories/${id}`, { replace: true })
           }}
           className="px-3 py-1 border rounded"
