@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
 import UploadImage from '../components/UploadImage'
 
 export default function ItemPage() {
   const { id, itemId } = useParams()
+  const nav = useNavigate()
   const [item, setItem] = useState(null)
   const [fields, setFields] = useState(null)
   const [fieldsFlat, setFieldsFlat] = useState([])
@@ -21,7 +22,6 @@ export default function ItemPage() {
   }
   useEffect(() => { load() }, [id, itemId])
 
-  // ✅ keep hooks at top level (fixes React error #310)
   const ordered = useMemo(() => {
     if (!fields || !fieldsFlat) return []
     const keyFor = (g) => {
@@ -34,10 +34,24 @@ export default function ItemPage() {
     })
   }, [fields, fieldsFlat])
 
+  const coerceNum = (v) => {
+    if (v === '' || v === null || v === undefined) return null
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+  }
+
   const save = async () => {
     if (!canWrite) return
-    await api.put(`/api/inventories/${id}/items/${itemId}`, item)
-    await load()
+    // sanitize before sending
+    const payload = { ...item }
+    ;['num1','num2','num3'].forEach(k => { payload[k] = coerceNum(payload[k]) })
+    try {
+      await api.put(`/api/inventories/${id}/items/${itemId}`, payload)
+      nav(`/inventories/${id}`, { replace: true })
+    } catch {
+      alert('Save failed')
+      await load()
+    }
   }
 
   const toggleLike = async () => {
@@ -91,7 +105,10 @@ export default function ItemPage() {
             <input
               type="number"
               value={item[key] ?? ''}
-              onChange={(e) => setItem({ ...item, [key]: e.target.valueAsNumber })}
+              onChange={(e) => {
+                const raw = e.target.value
+                setItem({ ...item, [key]: raw === '' ? '' : coerceNum(raw) })
+              }}
               className="px-2 py-1 border rounded"
               disabled={!canWrite}
             />
@@ -168,7 +185,8 @@ export default function ItemPage() {
           onClick={async () => {
             if (!canWrite) return
             await api.delete(`/api/inventories/${id}/items/${itemId}`)
-            history.back()
+       
+            nav(`/inventories/${id}`, { replace: true })
           }}
           className="px-3 py-1 border rounded"
           disabled={!canWrite}
