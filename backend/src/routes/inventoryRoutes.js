@@ -1,3 +1,4 @@
+// backend/src/routes/inventoryRoutes.js
 import { Router } from 'express'
 import { prisma } from '../services/prisma.js'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
@@ -366,11 +367,20 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   })
 })
 
-/* -------------- IMPORTANT FIX: sanitize item updates -------------- */
+/* -------------- IMPORTANT FIX: sanitize + scope item updates -------------- */
 router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   const { inv, access } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
+
+  // ✅ ensure the item exists and belongs to this inventory
+  const existing = await prisma.item.findUnique({
+    where: { id: req.params.itemId },
+    select: { id: true, inventoryId: true }
+  })
+  if (!existing || existing.inventoryId !== inv.id) {
+    return res.status(404).json({ error: 'Item not found' })
+  }
 
   const allow = new Set([
     'customId',
@@ -383,25 +393,27 @@ router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   ])
 
   const body = req.body || {}
-
   const clean = {}
   for (const k of Object.keys(body)) {
     if (!allow.has(k)) continue
     if (k.startsWith('num')) {
       const v = body[k]
-      const n = (v === '' || v === null || v === undefined) ? null : Number(v)
+      const n = (v === '' || v == null) ? null : Number(v)
       clean[k] = Number.isFinite(n) ? n : null
     } else if (k.startsWith('bool')) {
       const v = body[k]
-      clean[k] = (v === true || v === false) ? v : (!!v ? true : false)
-    } else if (k.startsWith('text') || k.startsWith('mtext') || k.startsWith('link') || k.startsWith('img') || k === 'customId') {
+      clean[k] = (v === true || v === false) ? v : !!v
+    } else {
       const v = body[k]
       clean[k] = (v === undefined) ? undefined : (v === null ? null : String(v))
     }
   }
 
   try {
-    const updated = await prisma.item.update({ where: { id: req.params.itemId }, data: clean })
+    const updated = await prisma.item.update({
+      where: { id: existing.id },
+      data: clean
+    })
     res.json(updated)
   } catch (e) {
     console.error('[item update]', e)
