@@ -3,7 +3,7 @@ import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { prisma } from '../services/prisma.js'        // ✅ use shared prisma
+import { prisma } from '../services/prisma.js'
 import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
 
@@ -12,9 +12,11 @@ const router = Router()
 configurePassport()
 router.use(passport.initialize())
 
+// FRONTEND base (no trailing slash)
 const frontendBase = (() => {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
-  return raw.startsWith('http') ? raw : `https://${raw}`
+  const url = raw.startsWith('http') ? raw : `https://${raw}`
+  return url.replace(/\/+$/, '')
 })()
 
 function normalizeRedirect(r) {
@@ -22,6 +24,11 @@ function normalizeRedirect(r) {
   return r.startsWith('/') ? r : '/profile'
 }
 
+/**
+ * Set cookie token (for back-compat) and return token for hash handoff.
+ * We keep SameSite=None;Secure so cookies work cross-site where allowed,
+ * but ALSO return JWT so SPA can persist to localStorage (OAuthCatch.jsx).
+ */
 function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
   const opts = {
@@ -41,36 +48,54 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-// ---------- OAuth ----------
+/** Helper: after OAuth success, redirect to /oauth-catch with #token so SPA can store it. */
+function redirectWithToken(res, token, rd) {
+  const rdSafe = encodeURIComponent(normalizeRedirect(rd))
+  // Hash params so they never hit server logs on the frontend, and no CORS needed
+  const url = `${frontendBase}/oauth-catch#token=${encodeURIComponent(token)}&rd=${rdSafe}`
+  res.redirect(url)
+}
+
+/* -------------------- OAuth: Google -------------------- */
 router.get('/google', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('google', { scope: ['profile','email'], state, session: false })(req, res, next)
 })
 
-router.get('/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
+router.get(
+  '/google/callback',
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=google`,
+  }),
   async (req, res) => {
-    setCookieToken(res, req.user)
-    const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
-    res.redirect(`${frontendBase}${rd}`)
+    // Create both cookie and token; redirect to oauth-catch so SPA can persist locally
+    const token = setCookieToken(res, req.user)
+    const rd = typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
+    redirectWithToken(res, token, rd)
   }
 )
 
+/* -------------------- OAuth: GitHub -------------------- */
 router.get('/github', (req, res, next) => {
   const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
   passport.authenticate('github', { scope: ['user:email'], state, session: false })(req, res, next)
 })
 
-router.get('/github/callback',
-  passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
+router.get(
+  '/github/callback',
+  passport.authenticate('github', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=github`,
+  }),
   async (req, res) => {
-    setCookieToken(res, req.user)
-    const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
-    res.redirect(`${frontendBase}${rd}`)
+    const token = setCookieToken(res, req.user)
+    const rd = typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
+    redirectWithToken(res, token, rd)
   }
 )
 
-// ---------- Email/password ----------
+/* -------------------- Email/Password -------------------- */
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}
@@ -90,8 +115,9 @@ router.post('/register', async (req, res) => {
     })
 
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
-    setCookieToken(res, safe)
-    res.json(safe)
+    const token = setCookieToken(res, safe)
+    // Include token in JSON too (lets clients choose cookie or localStorage)
+    res.json({ ...safe, token })
   } catch (e) {
     console.error('REGISTER_ERR', e)
     res.status(500).json({ error: 'SERVER_ERROR' })
@@ -118,8 +144,8 @@ router.post('/login', async (req, res) => {
     if (!ok) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
 
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
-    setCookieToken(res, safe)
-    res.json(safe)
+    const token = setCookieToken(res, safe)
+    res.json({ ...safe, token })
   } catch (e) {
     console.error('LOGIN_ERR', e)
     res.status(500).json({ error: 'SERVER_ERROR' })
@@ -128,9 +154,9 @@ router.post('/login', async (req, res) => {
 
 router.post('/set-password', async (req, res) => {
   try {
-    const token = bearerOrCookie(req)
-    if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
-    const { id } = jwt.verify(token, process.env.JWT_SECRET)
+    const raw = bearerOrCookie(req)
+    if (!raw) return res.status(401).json({ error: 'UNAUTHORIZED' })
+    const { id } = jwt.verify(raw, process.env.JWT_SECRET)
 
     const { password } = req.body || {}
     if (!password || password.length < 6) {
