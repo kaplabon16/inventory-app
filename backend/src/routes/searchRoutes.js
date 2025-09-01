@@ -9,7 +9,7 @@ router.get('/', async (req, res) => {
 
   try {
     const like = `%${q}%`
-    const rows = await prisma.$queryRawUnsafe(`
+    const rows = await prisma.$queryRaw`
       SELECT i.id,
              i."inventoryId",
              i."customId",
@@ -26,16 +26,16 @@ router.get('/', async (req, res) => {
           coalesce(i.text2,'')      || ' ' ||
           coalesce(i.text3,'')      || ' ' ||
           coalesce(inv.title,'')
-        ) @@ websearch_to_tsquery('simple', $1)
-        OR lower(i."customId") LIKE lower($2)
-        OR lower(inv.title)    LIKE lower($2)
-        OR lower(coalesce(i.text1,'')) LIKE lower($2)
-        OR lower(coalesce(i.text2,'')) LIKE lower($2)
-        OR lower(coalesce(i.text3,'')) LIKE lower($2)
+        ) @@ websearch_to_tsquery('simple', ${q})
+        OR lower(i."customId") LIKE lower(${like})
+        OR lower(inv.title)    LIKE lower(${like})
+        OR lower(coalesce(i.text1,'')) LIKE lower(${like})
+        OR lower(coalesce(i.text2,'')) LIKE lower(${like})
+        OR lower(coalesce(i.text3,'')) LIKE lower(${like})
       )
       ORDER BY i."createdAt" DESC
       LIMIT 100
-    `, q, like)
+    `
     res.json({ items: rows })
   } catch (e) {
     console.error(e)
