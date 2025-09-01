@@ -1,12 +1,12 @@
+// backend/src/routes/authRoutes.js
 import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { PrismaClient } from '@prisma/client'
+import { prisma } from '../services/prisma.js'        // ✅ use shared prisma
 import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
 
-const prisma = new PrismaClient()
 const router = Router()
 
 configurePassport()

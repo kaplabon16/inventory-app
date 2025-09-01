@@ -252,9 +252,12 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   })
 
   const tx = []
+  const MAX = 3 // ✅ DB has only 3 slots per type in Item; enforce here to prevent silent failures
   groups.forEach(group => {
     const type = typeMap[group]
-    const arr = Array.isArray(fields[group]) ? fields[group] : []
+    const raw = Array.isArray(fields[group]) ? fields[group] : []
+    const arr = raw.slice(0, MAX) // ✅ cap to 3
+
     arr.forEach((cfg, i) => {
       const slot = i + 1
       const key = `${type}-${slot}`
@@ -265,6 +268,8 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
         create: { inventoryId: inv.id, type, slot, title: cfg.title || '', description: cfg.desc || '', showInTable: !!cfg.show, displayOrder }
       }))
     })
+
+    // ✅ remove any extra slots beyond what we saved (including >3)
     tx.push(prisma.inventoryField.deleteMany({
       where: { inventoryId: inv.id, type, slot: { gt: arr.length } }
     }))

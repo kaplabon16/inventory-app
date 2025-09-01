@@ -1,6 +1,6 @@
 // backend/src/middleware/auth.js
 import jwt from 'jsonwebtoken'
-import { prisma } from '../services/prisma.js' // ✅ shared Prisma client
+import { prisma } from '../services/prisma.js' 
 
 export function signToken(user) {
   const payload = { id: user.id, roles: user.roles }
@@ -28,6 +28,6 @@ export async function optionalAuth(req, _res, next) {
     const decoded = jwt.verify(token, process.env.JWT_SECRET)
     const user = await prisma.user.findUnique({ where: { id: decoded.id } })
     if (user && !user.blocked) req.user = user
-  } catch { /* ignore */ }
+  } catch {}
   next()
 }

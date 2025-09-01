@@ -16,7 +16,6 @@ function norm(u) {
 
 const primary = norm(process.env.FRONTEND_URL)
 
-// Extra CSV list (domains or full URLs)
 const extra = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(norm)
@@ -57,9 +56,3 @@ export default {
   preflightContinue: false,
 }
 
-/**
- * Usage in index.js:
- *   app.use((req,res,next)=>{ res.setHeader('Vary','Origin'); next() })
- *   app.use(cors(corsCfg))
- *   app.options('*', cors(corsCfg))
- */
