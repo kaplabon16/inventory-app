@@ -41,59 +41,7 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-// Helper function to create or find OAuth user
-async function findOrCreateOAuthUser(profile, provider) {
-  try {
-    const email = profile.emails?.[0]?.value
-    if (!email) {
-      throw new Error('No email provided by OAuth provider')
-    }
 
-    // First try to find by email
-    let user = await prisma.user.findUnique({ 
-      where: { email }
-    })
-
-    if (!user) {
-      // Create new user if not found
-      user = await prisma.user.create({
-        data: {
-          email,
-          name: profile.displayName || profile.username || 'Unknown User',
-          avatar: profile.photos?.[0]?.value || null,
-          provider,
-          providerId: profile.id,
-          roles: [],
-          blocked: false,
-          // Don't set password for OAuth users
-        }
-      })
-    } else {
-      // Update OAuth provider info if user exists but doesn't have it
-      if (!user.provider || !user.providerId) {
-        user = await prisma.user.update({
-          where: { id: user.id },
-          data: { 
-            provider,
-            providerId: profile.id,
-            avatar: profile.photos?.[0]?.value || user.avatar
-          }
-        })
-      }
-    }
-
-    return {
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      roles: user.roles,
-      blocked: user.blocked
-    }
-  } catch (error) {
-    console.error(`OAuth ${provider} user creation/lookup error:`, error)
-    throw error
-  }
-}
 
 // ---------- OAuth ----------
 router.get('/google', (req, res, next) => {
@@ -114,23 +62,16 @@ router.get('/google/callback', async (req, res, next) => {
   passport.authenticate('google', { 
     session: false, 
     failureRedirect: `${frontendBase}/login?err=google` 
-  }, async (err, profile) => {
+  }, async (err, user, info) => {
     try {
       if (err) {
         console.error('Google OAuth error:', err)
         return res.redirect(`${frontendBase}/login?err=google`)
       }
 
-      if (!profile) {
-        console.error('No profile returned from Google')
+      if (!user) {
+        console.error('No user returned from Google:', info)
         return res.redirect(`${frontendBase}/login?err=google`)
-      }
-
-      // Create or find user
-      const user = await findOrCreateOAuthUser(profile, 'google')
-      
-      if (user.blocked) {
-        return res.redirect(`${frontendBase}/login?err=blocked`)
       }
 
       setCookieToken(res, user)
@@ -163,23 +104,16 @@ router.get('/github/callback', async (req, res, next) => {
   passport.authenticate('github', { 
     session: false, 
     failureRedirect: `${frontendBase}/login?err=github` 
-  }, async (err, profile) => {
+  }, async (err, user, info) => {
     try {
       if (err) {
         console.error('GitHub OAuth error:', err)
         return res.redirect(`${frontendBase}/login?err=github`)
       }
 
-      if (!profile) {
-        console.error('No profile returned from GitHub')
+      if (!user) {
+        console.error('No user returned from GitHub:', info)
         return res.redirect(`${frontendBase}/login?err=github`)
-      }
-
-      // Create or find user
-      const user = await findOrCreateOAuthUser(profile, 'github')
-      
-      if (user.blocked) {
-        return res.redirect(`${frontendBase}/login?err=blocked`)
       }
 
       setCookieToken(res, user)
