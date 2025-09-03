@@ -1,4 +1,3 @@
-// backend/src/index.js
 import 'dotenv/config'
 import express from 'express'
 import cookieParser from 'cookie-parser'
@@ -10,9 +9,8 @@ import fs from 'fs'
 import bcrypt from 'bcrypt'
 import corsCfg from './config/cors.js'
 import { optionalAuth } from './middleware/auth.js'
-import { prisma } from './services/prisma.js'   // ✅ use shared prisma
+import { prisma } from './services/prisma.js' 
 
-// Routes
 import authRoutes from './routes/authRoutes.js'
 import inventoryRoutes from './routes/inventoryRoutes.js'
 import userRoutes from './routes/userRoutes.js'
@@ -23,34 +21,33 @@ import uploadRoutes from './routes/uploadRoutes.js'
 
 const app = express()
 
-// trust proxy for Railway so secure cookies work
 app.set('trust proxy', 1)
 
-// ensure uploads dir
+
 const UP = path.resolve('uploads')
 if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 
-// ---- CORS FIRST, and keep it for preflight + errors
+
 app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next() })
 app.use(cors(corsCfg))
 app.options('*', cors(corsCfg))
 
-// Security + basics
+
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
 
-// static uploads
+
 app.use('/uploads', express.static(UP))
 
-// soft attach user if token present (for public pages)
+
 app.use(optionalAuth)
 
-// Health
+
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
-// API
+
 app.use('/api/auth', authRoutes)
 app.use('/api/inventories', inventoryRoutes)
 app.use('/api/users', userRoutes)
@@ -59,17 +56,17 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 app.use('/api/upload', uploadRoutes)
 
-// 404
+
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
 
-// Errors — make sure CORS still applies
+
 app.use((err, _req, res, _next) => {
   console.error('[server error]', err)
   res.setHeader('Vary','Origin')
   res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
 
-// --- Bootstrap admin + seed ----
+
 async function ensureDefaultAdmin() {
   const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com'
   const plain = process.env.DEFAULT_ADMIN_PASSWORD || 'changeme'

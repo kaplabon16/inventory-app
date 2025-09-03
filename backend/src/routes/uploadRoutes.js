@@ -9,7 +9,6 @@ import { v2 as cloudinary } from 'cloudinary'
 
 const router = Router()
 
-// Cloudinary config if present
 const hasCloud = !!process.env.CLOUDINARY_URL || (
   process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET
 )
@@ -42,8 +41,6 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
 
     const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
     if (!inv) return res.status(404).json({ error: 'Inventory not found' })
-
-    // ✅ allow any writer (owner/admin/publicWrite/access) to upload
     const access = await prisma.inventoryAccess.findMany({ where: { inventoryId } })
     if (!canWriteInventory(req.user, inv, access)) {
       return res.status(403).json({ error: 'Forbidden' })
@@ -64,7 +61,6 @@ router.post('/', requireAuth, upload.single('file'), async (req, res) => {
       return
     }
 
-    // Fallback: local FS
     const ts = Date.now()
     const safe = (req.file.originalname || 'file').replace(/[^a-z0-9_.-]/gi, '_')
     const filename = `${ts}_${safe}`

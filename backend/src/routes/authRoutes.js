@@ -1,9 +1,8 @@
-// backend/src/routes/authRoutes.js
 import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { prisma } from '../services/prisma.js'        // ✅ use shared prisma
+import { prisma } from '../services/prisma.js'    
 import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
 
@@ -41,9 +40,6 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
-
-
-// ---------- OAuth ----------
 router.get('/google', (req, res, next) => {
   try {
     const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
@@ -128,7 +124,6 @@ router.get('/github/callback', async (req, res, next) => {
   })(req, res, next)
 })
 
-// ---------- Email/password ----------
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}

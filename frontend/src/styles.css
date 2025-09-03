@@ -10,7 +10,7 @@
 :root { --bg-amoled: #000000; }
 html.dark body { background: var(--bg-amoled); }
 
-/* Shared button affordances */
+
 button, .btn, a.button {
   cursor: pointer;
   transition: background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;
@@ -22,18 +22,18 @@ button:active, .btn:active, a.button:active {
   transform: translateY(0.2px);
 }
 
-/* Little “saved” toast badge */
+
 .toast {
   @apply ml-2 inline-block px-2 py-0.5 text-xs rounded bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200;
 }
 
-/* Drag handle icon (three-lines) */
+
 .drag-handle::before {
   content: "≡";
   @apply text-gray-400;
 }
 
-/* Cards grid on Home */
+
 .card {
   @apply border rounded p-4 hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition;
 }

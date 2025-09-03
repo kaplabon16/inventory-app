@@ -1,4 +1,3 @@
-// frontend/src/pages/InventoryPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import api from '../api/client'
@@ -44,12 +43,11 @@ export default function InventoryPage() {
   const [showAdd, setShowAdd] = useState(false)
   const [newType, setNewType] = useState('text')
 
-  // Custom ID builder state
-  const [elements, setElements] = useState([])   // [{order,type,param?}]
+
+  const [elements, setElements] = useState([])  
   const [savedElements, setSavedElements] = useState([])
   const [selIdx, setSelIdx] = useState(-1)
 
-  // 🔔 keep hooks before any conditional return
   const [dragIndex, setDragIndex] = useState(-1)
 
   const toast = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2000) }
@@ -64,7 +62,6 @@ export default function InventoryPage() {
       setItems(Array.isArray(data?.items) ? data.items : [])
       setVersion(data?.inventory?.version || 1)
 
-      // fields grouped + flat order from API
       const g = data?.fields || emptyGroups()
       setFields({
         text:  Array.isArray(g.text)  ? g.text  : [],
@@ -77,7 +74,7 @@ export default function InventoryPage() {
       const flat = Array.isArray(data?.fieldsFlat) ? data.fieldsFlat : []
       setOrder(flat.map(f => ({ group: f.group, slot: f.slot })))
 
-      // custom id elements
+
       const els = Array.isArray(data?.elements) ? data.elements : []
       setElements(els)
       setSavedElements(els)
@@ -109,7 +106,7 @@ export default function InventoryPage() {
   }
   useEffect(() => { if (tab === 'stats') loadStats() }, [tab])
 
-  // ---------- ID Preview (live, safe — doesn't advance DB sequence) ----------
+
   const idPreview = useMemo(() => renderIdPreview(elements || []), [elements])
 
   const currentFlat = useMemo(() => {
@@ -127,7 +124,7 @@ export default function InventoryPage() {
   if (loadErr) return <div className="p-6 text-red-600">{loadErr}</div>
   if (!inv) return <div className="p-6">Loading…</div>
 
-  // ------- TABLE COLUMNS -------
+
   const itemCols = [
     { key: 'customId', title: 'ID', render: (v, r) => <Link to={user ? `/inventories/${id}/item/${r.id}` : '#'} className="text-blue-600">{v}</Link> },
     ...(['text','num','bool'].flatMap((g) =>
@@ -186,7 +183,7 @@ export default function InventoryPage() {
     }
   }
 
-  // ------- FIELD EDITING -------
+
 
   const pushNewField = (k) => {
     const next = { ...fields }
@@ -265,7 +262,6 @@ export default function InventoryPage() {
     const next = [...elements]
     const [m] = next.splice(from, 1)
     next.splice(to, 0, m)
-    // normalize order 1..N
     next.forEach((e, i) => { e.order = i + 1 })
     setElements(next)
     setSelIdx(to)
@@ -296,7 +292,6 @@ export default function InventoryPage() {
   }
 
   const testGenerateMany = () => {
-    // Front-end preview — doesn’t increment real sequence
     const samples = []
     for (let i = 0; i < 5; i++) samples.push(renderIdPreview(elements || []))
     return samples
@@ -429,7 +424,7 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* Palette */}
+
           <div className="p-3 border rounded">
             <div className="mb-2 font-medium">Palette</div>
             <div className="flex flex-wrap gap-2">
@@ -447,7 +442,7 @@ export default function InventoryPage() {
             </div>
           </div>
 
-          {/* Canvas */}
+
           <div className="p-3 border rounded">
             <div className="mb-2 font-medium">Canvas (drag to reorder)</div>
             <ul className="border divide-y rounded">
@@ -475,7 +470,7 @@ export default function InventoryPage() {
             </ul>
           </div>
 
-          {/* Config panel */}
+
           <div className="p-3 border rounded">
             <div className="mb-2 font-medium">Element config</div>
             {selIdx < 0 || !elements[selIdx] ? (
@@ -531,14 +526,14 @@ export default function InventoryPage() {
                       </label>
                     )
                   }
-                  // RAND/GUID have no extra config
+
                   return <div className="text-sm text-gray-500">No options for {cur.type}</div>
                 })()}
               </>
             )}
           </div>
 
-          {/* Actions */}
+
           <div className="flex flex-wrap items-center gap-2">
             <button className="px-3 py-1 text-sm border rounded" onClick={saveElems} disabled={!canEdit}>Save format</button>
             <button className="px-3 py-1 text-sm border rounded" onClick={resetElems} disabled={!canEdit}>Reset</button>
@@ -862,11 +857,11 @@ function DiscussionTab({ id }) {
   )
 }
 
-/* -------------------- Stats Tab -------------------- */
+
 function StatsTab({ stats, reload }) {
   useEffect(() => {
     if (!stats) reload?.()
-  }, []) // eslint-disable-line
+  }, []) 
 
   if (!stats) return <div className="p-4">Loading…</div>
 
@@ -881,7 +876,7 @@ function StatsTab({ stats, reload }) {
 
   return (
     <div className="grid gap-4 mt-3">
-      {/* Top cards */}
+
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
         <div className="p-4 border rounded">
           <div className="text-sm text-gray-500">Items total</div>
@@ -893,7 +888,7 @@ function StatsTab({ stats, reload }) {
         </div>
       </div>
 
-      {/* Numeric fields */}
+
       <div className="p-4 border rounded">
         <div className="mb-2 font-medium">Numeric fields</div>
         {nonEmptyNums.length === 0 ? (
@@ -926,7 +921,7 @@ function StatsTab({ stats, reload }) {
         )}
       </div>
 
-      {/* String fields top values */}
+
       <div className="p-4 border rounded">
         <div className="mb-2 font-medium">Top text values</div>
         {(stats.strings || []).length === 0 ? (
@@ -966,7 +961,7 @@ function StatsTab({ stats, reload }) {
         )}
       </div>
 
-      {/* Contributors */}
+
       <div className="p-4 border rounded">
         <div className="mb-2 font-medium">Top contributors</div>
         {(stats.contributors || []).length === 0 ? (

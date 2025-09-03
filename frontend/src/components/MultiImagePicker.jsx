@@ -1,19 +1,18 @@
-// frontend/src/components/MultiImagePicker.jsx
 import { useRef, useState } from "react"
 import api from "../api/client"
 
 export default function MultiImagePicker({
   label = "Images",
   inventoryId = "",
-  value = [],          // array of URLs, length 0..3
-  onChange,            // (urls: string[]) => void
+  value = [],        
+  onChange, 
   canWrite = false,
   max = 3,
 }) {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState("")
   const fileRef = useRef(null)
-  const [viewer, setViewer] = useState(null) // url or null
+  const [viewer, setViewer] = useState(null)
 
   const pick = () => fileRef.current?.click()
 
@@ -112,7 +111,7 @@ export default function MultiImagePicker({
         onChange={onFile}
       />
 
-      {/* thumbnails with drag */}
+    
       <div className="flex flex-wrap gap-2">
         {(value || []).map((u,i)=>(
           <div
@@ -141,7 +140,7 @@ export default function MultiImagePicker({
         ))}
       </div>
 
-      {/* simple full-screen viewer */}
+    
       {viewer && (
         <div
           role="dialog"

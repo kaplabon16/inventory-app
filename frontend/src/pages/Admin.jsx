@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next'
 export default function Admin() {
   const { t } = useTranslation()
   const [rows, setRows] = useState([])
-  const [selected, setSelected] = useState([]) // array of user ids
+  const [selected, setSelected] = useState([]) 
   const [loadingAction, setLoadingAction] = useState(false)
 
   const load = async () => {

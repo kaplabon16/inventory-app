@@ -1,4 +1,3 @@
-// frontend/src/pages/ItemPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
@@ -181,7 +180,7 @@ export default function ItemPage() {
           />
         </div>
         <button onClick={toggleLike} className="px-2 py-1 ml-3 border rounded">
-          👍 {likes}
+          ❤️ {likes}
         </button>
       </div>
 
