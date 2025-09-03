@@ -1,4 +1,3 @@
-// frontend/src/components/FieldsDesigner.jsx
 import { useMemo, useRef, useState } from "react"
 
 const TYPES = [
@@ -10,7 +9,7 @@ const TYPES = [
   { key: 'image', label: 'Image' },
 ]
 
-// Convert grouped fields to a flat array entries [{group,slot,title,desc,show,required}]
+
 export function flattenFields(fields) {
   const out = []
   for (const g of ['text','mtext','num','link','bool','image']) {
@@ -20,7 +19,7 @@ export function flattenFields(fields) {
   return out
 }
 
-// Pack flat list back to grouped object limited 3 per type
+
 export function packFields(list) {
   const grouped = { text:[], mtext:[], num:[], link:[], bool:[], image:[] }
   for (const g of Object.keys(grouped)) grouped[g] = []
@@ -30,7 +29,7 @@ export function packFields(list) {
       grouped[g].push({ title: e.title||'', desc: e.desc||'', show: !!e.show, required: !!e.required })
     }
   })
-  // ensure exactly arrays (<=3)
+
   for (const g of Object.keys(grouped)) grouped[g] = grouped[g].slice(0,3)
   return grouped
 }
@@ -65,7 +64,7 @@ export default function FieldsDesigner({ value, onChange }) {
     onChange?.(packFields(next), next.map(({group,slot}) => ({group,slot})))
   }
 
-  // DnD
+
   const dragIndexRef = useRef(null)
   const onDragStart = (_e, from) => { dragIndexRef.current = from }
   const onDragOver = (_to) => {}
@@ -76,7 +75,7 @@ export default function FieldsDesigner({ value, onChange }) {
     const next = [...list]
     const [mv] = next.splice(from, 1)
     next.splice(to, 0, mv)
-    // Re-pack slots within each group (1..3)
+
     const counts = { text:0, mtext:0, num:0, link:0, bool:0, image:0 }
     next.forEach(n => n.slot = ++counts[n.group])
     setList(next)

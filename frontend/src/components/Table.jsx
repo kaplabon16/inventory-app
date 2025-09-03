@@ -1,22 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
-/**
- * Controlled table with multi-select.
- *
- * Props:
- *  - columns: [{ key, title, render? }]
- *  - rows:    [{ id, ... }]
- *  - selected: string[] (optional)  // controlled selection
- *  - onSelect(ids: string[])        // called with the full selected ids list
- *  - rowLink?: (row) => string      // click row to navigate
- *  - emptyText?: string
- */
+
 export default function Table({ columns, rows, selected, onSelect, rowLink, emptyText = "No data" }) {
   const controlled = Array.isArray(selected)
   const [internal, setInternal] = useState(() => new Set())
   const sel = useMemo(() => (controlled ? new Set(selected) : internal), [controlled, selected, internal])
 
-  // keep internal selection in sync if parent controls it
   useEffect(() => {
     if (controlled) setInternal(new Set(selected))
   }, [controlled, selected])

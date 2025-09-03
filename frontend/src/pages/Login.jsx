@@ -11,7 +11,7 @@ export default function Login() {
   const sp = new URLSearchParams(loc.search)
   const redirect = sp.get("redirect") || "/profile"
 
-  // Base API origin without trailing /api so we can hit OAuth endpoints directly
+
   const API = (import.meta.env.VITE_API_BASE || "")
     .replace(/\/+$/, "")
     .replace(/\/api$/i, "")
@@ -22,7 +22,7 @@ export default function Login() {
   const [err, setErr] = useState("")
 
   useEffect(() => {
-    // If already logged in, bounce to redirect target
+
     if (user) nav(redirect, { replace: true })
   }, [user, redirect, nav])
 

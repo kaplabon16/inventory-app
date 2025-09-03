@@ -28,7 +28,6 @@ export async function generateCustomId(inventoryId) {
     orderBy: { order: 'asc' }
   })
 
-  // sensible default if not configured yet
   if (elems.length === 0) {
     const seq = await nextSequence(inventoryId, '0001')
     return `INV-${dayjs().format('YYMM')}-${seq}`

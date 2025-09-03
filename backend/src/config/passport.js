@@ -1,8 +1,7 @@
-// backend/src/config/passport.js
 import passport from 'passport'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { Strategy as GitHubStrategy } from 'passport-github2'
-import { prisma } from '../services/prisma.js' // ✅ use shared Prisma client
+import { prisma } from '../services/prisma.js' 
 
 export function configurePassport() {
   const {
@@ -46,7 +45,6 @@ export function configurePassport() {
               }
             })
           } else {
-            // Update existing user with OAuth info if missing
             if (!user.provider || !user.providerId) {
               user = await prisma.user.update({
                 where: { email },
@@ -59,7 +57,6 @@ export function configurePassport() {
             }
           }
 
-          // Check if user is blocked
           if (user.blocked) {
             return done(null, false, { message: 'Account is blocked' })
           }
@@ -88,8 +85,7 @@ export function configurePassport() {
         scope: ['user:email'] 
       },
       async (_at, _rt, profile, done) => {
-        try {
-          // GitHub email handling - prefer verified emails
+        try {       
           const email = (
             profile.emails?.find(e => e.verified)?.value || 
             profile.emails?.[0]?.value ||
@@ -107,8 +103,7 @@ export function configurePassport() {
           let user = await prisma.user.findUnique({ where: { email } })
           
           if (!user) {
-            // Create new user
-            user = await prisma.user.create({
+              user = await prisma.user.create({
               data: { 
                 email, 
                 name: name || email, 
@@ -119,8 +114,7 @@ export function configurePassport() {
                 blocked: false
               }
             })
-          } else {
-            // Update existing user with OAuth info if missing
+          } else {       
             if (!user.provider || !user.providerId) {
               user = await prisma.user.update({
                 where: { email },
@@ -133,8 +127,7 @@ export function configurePassport() {
             }
           }
 
-          // Check if user is blocked
-          if (user.blocked) {
+             if (user.blocked) {
             return done(null, false, { message: 'Account is blocked' })
           }
 

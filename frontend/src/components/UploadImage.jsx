@@ -6,7 +6,7 @@ export default function UploadImage({
   onChange,
   label = "Image",
   inventoryId = "",
-  canWrite = false, // ✅ NEW: control visibility of upload actions
+  canWrite = false,
 }) {
   const fileRef = useRef(null)
   const [loading, setLoading] = useState(false)
@@ -52,8 +52,7 @@ export default function UploadImage({
       <div className="flex items-center gap-2">
         <span className="text-sm">{label}</span>
 
-        {/* ✅ Hide upload controls unless user can write */}
-        {canWrite && (
+          {canWrite && (
           <>
             <button
               type="button"

@@ -1,5 +1,3 @@
-
-// backend/src/config/cors.js
 import dotenv from 'dotenv'
 import cors from 'cors'
 dotenv.config()
@@ -23,16 +21,8 @@ const extra = (process.env.CORS_ORIGINS || '')
 
 const allowSet = new Set([primary, ...extra].filter(Boolean))
 
-/**
- * Accept:
- *  - Exact FRONTEND_URL
- *  - Any domain listed in CORS_ORIGINS
- *  - Any *.vercel.app (preview builds)
- *  - localhost dev
- */
 export default {
   origin(origin, cb) {
-    // Non-browser / same-origin / server-to-server
     if (!origin) return cb(null, true)
     try {
       const u = new URL(origin)

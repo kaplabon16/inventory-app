@@ -1,4 +1,3 @@
-// backend/src/routes/inventoryRoutes.js
 import { Router } from 'express'
 import { prisma } from '../services/prisma.js'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
@@ -10,7 +9,6 @@ router.use(optionalAuth)
 
 const setNoStore = (res) => res.set('Cache-Control', 'no-store, max-age=0')
 
-/* ---------------- LISTS ---------------- */
 
 router.get('/public-recent', async (req, res) => {
   setNoStore(res)
@@ -100,7 +98,6 @@ router.get('/', optionalAuth, async (req, res) => {
   })))
 })
 
-/* ---------------- CREATE ---------------- */
 
 router.post('/', requireAuth, async (req, res) => {
   const { title, description, categoryId } = req.body || {}
@@ -117,7 +114,6 @@ router.post('/', requireAuth, async (req, res) => {
   res.json(inv)
 })
 
-/* ---------------- READ ONE (PUBLIC) ---------------- */
 
 function typeLabelToKey(t) {
   switch (t) {
@@ -195,7 +191,6 @@ router.get('/:id', async (req, res) => {
   })
 })
 
-/* ---------------- UPDATE / DELETE INVENTORY ---------------- */
 
 router.put('/:id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -232,7 +227,6 @@ router.delete('/:id', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---------------- FIELDS ---------------- */
 
 router.post('/:id/fields', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -252,11 +246,11 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   })
 
   const tx = []
-  const MAX = 3 // ✅ DB has only 3 slots per type in Item; enforce here to prevent silent failures
+  const MAX = 3
   groups.forEach(group => {
     const type = typeMap[group]
     const raw = Array.isArray(fields[group]) ? fields[group] : []
-    const arr = raw.slice(0, MAX) // ✅ cap to 3
+    const arr = raw.slice(0, MAX)
 
     arr.forEach((cfg, i) => {
       const slot = i + 1
@@ -269,7 +263,6 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
       }))
     })
 
-    // ✅ remove any extra slots beyond what we saved (including >3)
     tx.push(prisma.inventoryField.deleteMany({
       where: { inventoryId: inv.id, type, slot: { gt: arr.length } }
     }))
@@ -279,7 +272,6 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   res.json({ ok: true, message: 'Saved field config' })
 })
 
-/* ---------------- CUSTOM ID ELEMENTS ---------------- */
 
 router.post('/:id/custom-id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -307,7 +299,6 @@ router.post('/:id/custom-id', requireAuth, async (req, res) => {
   res.json({ ok: true, elements: saved })
 })
 
-/* ---------------- ITEMS ---------------- */
 
 async function getInvWithAccess(id) {
   const [inv, access] = await Promise.all([
@@ -372,13 +363,11 @@ router.get('/:id/items/:itemId', requireAuth, async (req, res) => {
   })
 })
 
-/* -------------- IMPORTANT FIX: sanitize + scope item updates -------------- */
 router.put('/:id/items/:itemId', requireAuth, async (req, res) => {
   const { inv, access } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!canWriteInventory(req.user, inv, access)) return res.status(403).json({ error: 'Forbidden' })
 
-  // ✅ ensure the item exists and belongs to this inventory
   const existing = await prisma.item.findUnique({
     where: { id: req.params.itemId },
     select: { id: true, inventoryId: true }
@@ -435,7 +424,6 @@ router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-/* ---------------- LIKE / COMMENTS / ACCESS ---------------- */
 
 router.post('/:id/items/:itemId/like', requireAuth, async (req, res) => {
   const { inv } = await getInvWithAccess(req.params.id)
@@ -520,8 +508,6 @@ router.delete('/:id/access/:userId', requireAuth, async (req, res) => {
   })
   res.json({ ok: true })
 })
-
-/* ---------------- STATS ---------------- */
 
 router.get('/:id/stats', async (req, res) => {
   try {
