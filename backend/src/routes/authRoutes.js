@@ -1,15 +1,17 @@
+// backend/src/routes/authRoutes.js
 import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { prisma } from '../services/prisma.js'    
+import { prisma } from '../services/prisma.js'
 import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
 
 const router = Router()
-
 configurePassport()
 router.use(passport.initialize())
+
+const isProd = process.env.NODE_ENV === 'production'
 
 const frontendBase = (() => {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
@@ -25,8 +27,8 @@ function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
   const opts = {
     httpOnly: true,
-    sameSite: 'none',
-    secure: true,
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,           // critical: dev cookies must not require https
     path: '/',
     ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
   }
@@ -40,108 +42,70 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
+/* ---------- GOOGLE ---------- */
 router.get('/google', (req, res, next) => {
-  try {
-    const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
-    passport.authenticate('google', { 
-      scope: ['profile', 'email'], 
-      state, 
-      session: false 
-    })(req, res, next)
-  } catch (error) {
-    console.error('Google OAuth initiation error:', error)
-    res.redirect(`${frontendBase}/login?err=google`)
-  }
-})
-
-router.get('/google/callback', async (req, res, next) => {
-  passport.authenticate('google', { 
-    session: false, 
-    failureRedirect: `${frontendBase}/login?err=google` 
-  }, async (err, user, info) => {
-    try {
-      if (err) {
-        console.error('Google OAuth error:', err)
-        return res.redirect(`${frontendBase}/login?err=google`)
-      }
-
-      if (!user) {
-        console.error('No user returned from Google:', info)
-        return res.redirect(`${frontendBase}/login?err=google`)
-      }
-
-      setCookieToken(res, user)
-      const rd = normalizeRedirect(
-        typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
-      )
-      res.redirect(`${frontendBase}${rd}`)
-    } catch (error) {
-      console.error('Google OAuth callback error:', error)
-      res.redirect(`${frontendBase}/login?err=google`)
-    }
+  const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+    state,
+    session: false
   })(req, res, next)
 })
 
+router.get('/google/callback', (req, res, next) => {
+  passport.authenticate('google', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=google`
+  }, (err, user, info) => {
+    if (err || !user) return res.redirect(`${frontendBase}/login?err=google`)
+    setCookieToken(res, user)
+    const rd = normalizeRedirect(
+      typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
+    )
+    return res.redirect(`${frontendBase}${rd}`)
+  })(req, res, next)
+})
+
+/* ---------- GITHUB ---------- */
 router.get('/github', (req, res, next) => {
-  try {
-    const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
-    passport.authenticate('github', { 
-      scope: ['user:email'], 
-      state, 
-      session: false 
-    })(req, res, next)
-  } catch (error) {
-    console.error('GitHub OAuth initiation error:', error)
-    res.redirect(`${frontendBase}/login?err=github`)
-  }
-})
-
-router.get('/github/callback', async (req, res, next) => {
-  passport.authenticate('github', { 
-    session: false, 
-    failureRedirect: `${frontendBase}/login?err=github` 
-  }, async (err, user, info) => {
-    try {
-      if (err) {
-        console.error('GitHub OAuth error:', err)
-        return res.redirect(`${frontendBase}/login?err=github`)
-      }
-
-      if (!user) {
-        console.error('No user returned from GitHub:', info)
-        return res.redirect(`${frontendBase}/login?err=github`)
-      }
-
-      setCookieToken(res, user)
-      const rd = normalizeRedirect(
-        typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
-      )
-      res.redirect(`${frontendBase}${rd}`)
-    } catch (error) {
-      console.error('GitHub OAuth callback error:', error)
-      res.redirect(`${frontendBase}/login?err=github`)
-    }
+  const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
+  passport.authenticate('github', {
+    scope: ['user:email'],
+    state,
+    session: false
   })(req, res, next)
 })
 
+router.get('/github/callback', (req, res, next) => {
+  passport.authenticate('github', {
+    session: false,
+    failureRedirect: `${frontendBase}/login?err=github`
+  }, (err, user, info) => {
+    if (err || !user) return res.redirect(`${frontendBase}/login?err=github`)
+    setCookieToken(res, user)
+    const rd = normalizeRedirect(
+      typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
+    )
+    return res.redirect(`${frontendBase}${rd}`)
+  })(req, res, next)
+})
+
+/* ---------- EMAIL/PASSWORD ---------- */
 router.post('/register', async (req, res) => {
   try {
     let { email, name, password } = req.body || {}
     email = (email || '').trim().toLowerCase()
     name = (name || '').trim()
-
     if (!email || !name || !password || password.length < 6) {
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'Name, email and 6+ char password required.' })
     }
-
     const exists = await prisma.user.findUnique({ where: { email } })
     if (exists) return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
 
     const hash = await bcrypt.hash(password, 10)
     const user = await prisma.user.create({
-      data: { email, name, password: hash, roles: [], blocked: false },
+      data: { email, name, password: hash, roles: [], blocked: false }
     })
-
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
     setCookieToken(res, safe)
     res.json(safe)
@@ -161,10 +125,7 @@ router.post('/login', async (req, res) => {
     if (!user) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
     if (user.blocked) return res.status(403).json({ error: 'BLOCKED', message: 'Your account is blocked.' })
     if (!user.password) {
-      return res.status(400).json({
-        error: 'OAUTH_ONLY',
-        message: 'This account uses Google/GitHub. Use social login or set a password after OAuth.',
-      })
+      return res.status(400).json({ error: 'OAUTH_ONLY', message: 'This account uses Google/GitHub.' })
     }
 
     const ok = await bcrypt.compare(password, user.password)
@@ -184,17 +145,14 @@ router.post('/set-password', async (req, res) => {
     const token = bearerOrCookie(req)
     if (!token) return res.status(401).json({ error: 'UNAUTHORIZED' })
     const { id } = jwt.verify(token, process.env.JWT_SECRET)
-
     const { password } = req.body || {}
     if (!password || password.length < 6) {
       return res.status(400).json({ error: 'INVALID_INPUT', message: 'Password must be 6+ characters.' })
     }
-
     const hash = await bcrypt.hash(password, 10)
     const user = await prisma.user.update({
-      where: { id },
-      data: { password: hash },
-      select: { id: true, email: true, name: true, roles: true, blocked: true },
+      where: { id }, data: { password: hash },
+      select: { id: true, email: true, name: true, roles: true, blocked: true }
     })
     res.json({ ok: true, user })
   } catch (e) {
@@ -210,7 +168,7 @@ router.get('/me', async (req, res) => {
     const { id } = jwt.verify(raw, process.env.JWT_SECRET)
     const user = await prisma.user.findUnique({
       where: { id },
-      select: { id: true, email: true, name: true, roles: true, blocked: true },
+      select: { id: true, email: true, name: true, roles: true, blocked: true }
     })
     res.json(user || null)
   } catch {
@@ -219,11 +177,11 @@ router.get('/me', async (req, res) => {
 })
 
 router.post('/logout', (req, res) => {
-  const opts = { 
-    sameSite: 'none', 
-    secure: true, 
-    path: '/', 
-    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}) 
+  const opts = {
+    sameSite: isProd ? 'none' : 'lax',
+    secure: isProd,
+    path: '/',
+    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {})
   }
   res.clearCookie('token', opts)
   res.json({ ok: true })
