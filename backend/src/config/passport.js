@@ -1,7 +1,7 @@
 import passport from 'passport'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { Strategy as GitHubStrategy } from 'passport-github2'
-import { prisma } from '../services/prisma.js'
+import { prisma } from '../services/prisma.js' 
 
 export function configurePassport() {
   const {
@@ -13,46 +13,64 @@ export function configurePassport() {
 
   if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET && GOOGLE_CALLBACK) {
     passport.use(new GoogleStrategy(
-      {
-        clientID: GOOGLE_CLIENT_ID,
-        clientSecret: GOOGLE_CLIENT_SECRET,
-        callbackURL: GOOGLE_CALLBACK
-        // response_type defaults to "code"
-        // state is passed via authenticate() options in routes
+      { 
+        clientID: GOOGLE_CLIENT_ID, 
+        clientSecret: GOOGLE_CLIENT_SECRET, 
+        callbackURL: GOOGLE_CALLBACK 
       },
       async (_at, _rt, profile, done) => {
         try {
           const email = profile.emails?.[0]?.value?.toLowerCase()
           const name = profile.displayName || profile.username || email
           const avatar = profile.photos?.[0]?.value
-
-          if (!email) return done(null, false, { message: 'No email from Google' })
+          
+          if (!email) {
+            console.error('Google OAuth: No email provided')
+            return done(null, false)
+          }
 
           let user = await prisma.user.findUnique({ where: { email } })
+          
           if (!user) {
+            
             user = await prisma.user.create({
-              data: {
-                email, name: name || email, avatar,
-                provider: 'google', providerId: profile.id,
-                roles: [], blocked: false
+              data: { 
+                email, 
+                name: name || email, 
+                avatar, 
+                provider: 'google', 
+                providerId: profile.id, 
+                roles: [],
+                blocked: false
               }
             })
-          } else if (!user.provider || !user.providerId) {
-            user = await prisma.user.update({
-              where: { email },
-              data: {
-                provider: 'google',
-                providerId: profile.id,
-                avatar: avatar || user.avatar
-              }
-            })
+          } else {
+            if (!user.provider || !user.providerId) {
+              user = await prisma.user.update({
+                where: { email },
+                data: {
+                  provider: 'google',
+                  providerId: profile.id,
+                  avatar: avatar || user.avatar
+                }
+              })
+            }
           }
-          if (user.blocked) return done(null, false, { message: 'Account is blocked' })
 
-          return done(null, { id: user.id, roles: user.roles, name: user.name, email: user.email, blocked: user.blocked })
-        } catch (e) {
+          if (user.blocked) {
+            return done(null, false, { message: 'Account is blocked' })
+          }
+
+          return done(null, { 
+            id: user.id, 
+            roles: user.roles, 
+            name: user.name, 
+            email: user.email, 
+            blocked: user.blocked 
+          })
+        } catch (e) { 
           console.error('Google OAuth error:', e)
-          return done(e)
+          return done(e) 
         }
       }
     ))
@@ -60,50 +78,69 @@ export function configurePassport() {
 
   if (GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET && GITHUB_CALLBACK) {
     passport.use(new GitHubStrategy(
-      {
-        clientID: GITHUB_CLIENT_ID,
-        clientSecret: GITHUB_CLIENT_SECRET,
-        callbackURL: GITHUB_CALLBACK,
-        scope: ['user:email']
+      { 
+        clientID: GITHUB_CLIENT_ID, 
+        clientSecret: GITHUB_CLIENT_SECRET, 
+        callbackURL: GITHUB_CALLBACK, 
+        scope: ['user:email'] 
       },
       async (_at, _rt, profile, done) => {
-        try {
+        try {       
           const email = (
-            profile.emails?.find(e => e.verified)?.value ||
+            profile.emails?.find(e => e.verified)?.value || 
             profile.emails?.[0]?.value ||
             (profile.username ? `${profile.username}@users.noreply.github.com` : null)
           )?.toLowerCase()
-
+          
           const name = profile.displayName || profile.username || email
           const avatar = profile.photos?.[0]?.value
-
-          if (!email) return done(null, false, { message: 'No email from GitHub' })
+          
+          if (!email) {
+            console.error('GitHub OAuth: No email provided')
+            return done(null, false)
+          }
 
           let user = await prisma.user.findUnique({ where: { email } })
+          
           if (!user) {
-            user = await prisma.user.create({
-              data: {
-                email, name: name || email, avatar,
-                provider: 'github', providerId: profile.id,
-                roles: [], blocked: false
+              user = await prisma.user.create({
+              data: { 
+                email, 
+                name: name || email, 
+                avatar, 
+                provider: 'github', 
+                providerId: profile.id, 
+                roles: [],
+                blocked: false
               }
             })
-          } else if (!user.provider || !user.providerId) {
-            user = await prisma.user.update({
-              where: { email },
-              data: {
-                provider: 'github',
-                providerId: profile.id,
-                avatar: avatar || user.avatar
-              }
-            })
+          } else {       
+            if (!user.provider || !user.providerId) {
+              user = await prisma.user.update({
+                where: { email },
+                data: {
+                  provider: 'github',
+                  providerId: profile.id,
+                  avatar: avatar || user.avatar
+                }
+              })
+            }
           }
-          if (user.blocked) return done(null, false, { message: 'Account is blocked' })
 
-          return done(null, { id: user.id, roles: user.roles, name: user.name, email: user.email, blocked: user.blocked })
-        } catch (e) {
+             if (user.blocked) {
+            return done(null, false, { message: 'Account is blocked' })
+          }
+
+          return done(null, { 
+            id: user.id, 
+            roles: user.roles, 
+            name: user.name, 
+            email: user.email, 
+            blocked: user.blocked 
+          })
+        } catch (e) { 
           console.error('GitHub OAuth error:', e)
-          return done(e)
+          return done(e) 
         }
       }
     ))
