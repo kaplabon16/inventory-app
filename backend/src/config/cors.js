@@ -7,14 +7,21 @@ function norm(u) {
   const s = String(u).trim()
   if (!s) return null
   const withProto = /^https?:\/\//i.test(s) ? s : `https://${s}`
-  try { return new URL(withProto).origin } catch { return null }
+  try {
+    return new URL(withProto).origin
+  } catch { return null }
 }
 
 const primary = norm(process.env.FRONTEND_URL)
-const extra = (process.env.CORS_ORIGINS || '').split(',').map(norm).filter(Boolean)
+
+const extra = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(norm)
+  .filter(Boolean)
+
 const allowSet = new Set([primary, ...extra].filter(Boolean))
 
-const corsOptions = {
+export default {
   origin(origin, cb) {
     if (!origin) return cb(null, true)
     try {
@@ -25,7 +32,8 @@ const corsOptions = {
         /\.vercel\.app$/i.test(host) ||
         /^localhost(:\d+)?$/i.test(host) ||
         /^127\.0\.0\.1(:\d+)?$/.test(host)
-      return ok ? cb(null, true) : cb(new Error(`Not allowed by CORS: ${origin}`))
+      if (ok) return cb(null, true)
+      return cb(new Error(`Not allowed by CORS: ${origin}`))
     } catch {
       return cb(new Error(`Invalid origin: ${origin}`))
     }
@@ -35,7 +43,6 @@ const corsOptions = {
   allowedHeaders: ['Content-Type','Authorization'],
   exposedHeaders: ['Content-Type'],
   optionsSuccessStatus: 204,
-  preflightContinue: false
+  preflightContinue: false,
 }
 
-export default cors(corsOptions)
