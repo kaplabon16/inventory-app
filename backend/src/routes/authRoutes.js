@@ -12,7 +12,7 @@ const router = Router()
 configurePassport()
 router.use(passport.initialize())
 
-
+// Normalize FRONTEND_URL into a full origin (handles plain hostnames)
 const frontendBase = (() => {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
   return raw.startsWith('http') ? raw : `https://${raw}`
@@ -33,22 +33,21 @@ function bearerOrCookie(req) {
 function setCookieToken(res, userPayload) {
   const token = signToken(userPayload)
 
-
   function saneDomain(raw) {
     if (!raw) return null
     try {
       if (/^https?:\/\//i.test(raw)) raw = new URL(raw).hostname
-    } catch {}
+    } catch { /* ignore invalid URL */ }
     raw = String(raw).trim()
       .replace(/^\.+/, '')        // strip leading dots
       .replace(/:\d+$/, '')       // strip port
       .toLowerCase()
 
-   
+    // reject invalid hostnames, localhost, and IPs
     if (!/^[a-z0-9.-]+$/.test(raw)) return null
     if (raw === 'localhost') return null
-    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(raw)) return null 
-    if (/^\[.*\]$/.test(raw)) return null                
+    if (/^(\d{1,3}\.){3}\d{1,3}$/.test(raw)) return null // ipv4
+    if (/^\[.*\]$/.test(raw)) return null                // ipv6
 
     return raw
   }
@@ -57,8 +56,8 @@ function setCookieToken(res, userPayload) {
 
   const opts = {
     httpOnly: true,
-    sameSite: 'none',   
-    secure: true,      
+    sameSite: 'none',
+    secure: true,
     path: '/',
     ...(dom ? { domain: dom } : {}),
   }
@@ -67,7 +66,7 @@ function setCookieToken(res, userPayload) {
   return token
 }
 
-
+/* ---------------- OAuth: Google ---------------- */
 
 router.get('/google', (req, res, next) => {
   try {
@@ -95,7 +94,6 @@ router.get('/google/callback', (req, res, next) => {
         return res.redirect(`${frontendBase}/login?err=google`)
       }
 
-    
       const token = setCookieToken(res, user)
       const rd = normalizeRedirect(
         typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
@@ -109,7 +107,7 @@ router.get('/google/callback', (req, res, next) => {
   })(req, res, next)
 })
 
-
+/* ---------------- OAuth: GitHub ---------------- */
 
 router.get('/github', (req, res, next) => {
   try {
@@ -137,7 +135,6 @@ router.get('/github/callback', (req, res, next) => {
         return res.redirect(`${frontendBase}/login?err=github`)
       }
 
-    
       const token = setCookieToken(res, user)
       const rd = normalizeRedirect(
         typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
@@ -151,7 +148,7 @@ router.get('/github/callback', (req, res, next) => {
   })(req, res, next)
 })
 
-
+/* ---------------- Email/password auth ---------------- */
 
 router.post('/register', async (req, res) => {
   try {
@@ -250,18 +247,18 @@ router.get('/me', async (req, res) => {
 })
 
 router.post('/logout', (req, res) => {
+  const dom = (() => {
+    let raw = process.env.COOKIE_DOMAIN
+    if (!raw) return null
+    try { if (/^https?:\/\//i.test(raw)) raw = new URL(raw).hostname } catch {}
+    return String(raw || '').trim().replace(/^\.+/,'').replace(/:\d+$/,'').toLowerCase()
+  })()
+
   const opts = {
     sameSite: 'none',
     secure: true,
     path: '/',
-    ...(process.env.COOKIE_DOMAIN ? { domain: (() => {
-      
-      const raw = process.env.COOKIE_DOMAIN
-      try {
-        if (/^https?:\/\//i.test(raw)) return new URL(raw).hostname
-      } catch { }
-      return String(raw || '').trim().replace(/^\.+/,'').replace(/:\d+$/,'').toLowerCase()
-    })() } : {})
+    ...(dom ? { domain: dom } : {})
   }
   res.clearCookie('token', opts)
   res.json({ ok: true })
