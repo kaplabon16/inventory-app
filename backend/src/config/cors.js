@@ -14,7 +14,6 @@ function norm(u) {
 
 const primary = norm(process.env.FRONTEND_URL)
 
-
 const extra = (process.env.CORS_ORIGINS || '')
   .split(',')
   .map(norm)
@@ -22,11 +21,8 @@ const extra = (process.env.CORS_ORIGINS || '')
 
 const allowSet = new Set([primary, ...extra].filter(Boolean))
 
-
-
 export default {
   origin(origin, cb) {
-  
     if (!origin) return cb(null, true)
     try {
       const u = new URL(origin)
@@ -49,3 +45,4 @@ export default {
   optionsSuccessStatus: 204,
   preflightContinue: false,
 }
+

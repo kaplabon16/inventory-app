@@ -30,4 +30,3 @@ export async function optionalAuth(req, _res, next) {
   } catch {}
   next()
 }
-
