@@ -1,8 +1,9 @@
+// backend/src/routes/authRoutes.js
 import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { prisma } from '../services/prisma.js'    
+import { prisma } from '../services/prisma.js'      
 import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
 
@@ -15,6 +16,8 @@ const frontendBase = (() => {
   const raw = process.env.FRONTEND_URL || 'http://localhost:5173'
   return raw.startsWith('http') ? raw : `https://${raw}`
 })()
+
+const oauthPath = process.env.FRONTEND_OAUTH_PATH || '/oauth'
 
 function normalizeRedirect(r) {
   if (!r || typeof r !== 'string') return '/profile'
@@ -40,89 +43,38 @@ function bearerOrCookie(req) {
   return req.cookies?.token || null
 }
 
+// ---------- OAuth ----------
 router.get('/google', (req, res, next) => {
-  try {
-    const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
-    passport.authenticate('google', { 
-      scope: ['profile', 'email'], 
-      state, 
-      session: false 
-    })(req, res, next)
-  } catch (error) {
-    console.error('Google OAuth initiation error:', error)
-    res.redirect(`${frontendBase}/login?err=google`)
+  const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
+  passport.authenticate('google', { scope: ['profile','email'], state, session: false })(req, res, next)
+})
+
+router.get(
+  '/google/callback',
+  passport.authenticate('google', { session: false, failureRedirect: `${frontendBase}/login?err=google` }),
+  async (req, res) => {
+    const token = setCookieToken(res, req.user) 
+    const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
+   
+    res.redirect(`${frontendBase}${oauthPath}#token=${encodeURIComponent(token)}&rd=${encodeURIComponent(rd)}`)
   }
-})
-
-router.get('/google/callback', async (req, res, next) => {
-  passport.authenticate('google', { 
-    session: false, 
-    failureRedirect: `${frontendBase}/login?err=google` 
-  }, async (err, user, info) => {
-    try {
-      if (err) {
-        console.error('Google OAuth error:', err)
-        return res.redirect(`${frontendBase}/login?err=google`)
-      }
-
-      if (!user) {
-        console.error('No user returned from Google:', info)
-        return res.redirect(`${frontendBase}/login?err=google`)
-      }
-
-      setCookieToken(res, user)
-      const rd = normalizeRedirect(
-        typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
-      )
-      res.redirect(`${frontendBase}${rd}`)
-    } catch (error) {
-      console.error('Google OAuth callback error:', error)
-      res.redirect(`${frontendBase}/login?err=google`)
-    }
-  })(req, res, next)
-})
+)
 
 router.get('/github', (req, res, next) => {
-  try {
-    const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
-    passport.authenticate('github', { 
-      scope: ['user:email'], 
-      state, 
-      session: false 
-    })(req, res, next)
-  } catch (error) {
-    console.error('GitHub OAuth initiation error:', error)
-    res.redirect(`${frontendBase}/login?err=github`)
+  const state = encodeURIComponent(normalizeRedirect(req.query.redirect))
+  passport.authenticate('github', { scope: ['user:email'], state, session: false })(req, res, next)
+})
+
+router.get(
+  '/github/callback',
+  passport.authenticate('github', { session: false, failureRedirect: `${frontendBase}/login?err=github` }),
+  async (req, res) => {
+    const token = setCookieToken(res, req.user)
+    const rd = normalizeRedirect(typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : '')
+    res.redirect(`${frontendBase}${oauthPath}#token=${encodeURIComponent(token)}&rd=${encodeURIComponent(rd)}`)
   }
-})
+)
 
-router.get('/github/callback', async (req, res, next) => {
-  passport.authenticate('github', { 
-    session: false, 
-    failureRedirect: `${frontendBase}/login?err=github` 
-  }, async (err, user, info) => {
-    try {
-      if (err) {
-        console.error('GitHub OAuth error:', err)
-        return res.redirect(`${frontendBase}/login?err=github`)
-      }
-
-      if (!user) {
-        console.error('No user returned from GitHub:', info)
-        return res.redirect(`${frontendBase}/login?err=github`)
-      }
-
-      setCookieToken(res, user)
-      const rd = normalizeRedirect(
-        typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
-      )
-      res.redirect(`${frontendBase}${rd}`)
-    } catch (error) {
-      console.error('GitHub OAuth callback error:', error)
-      res.redirect(`${frontendBase}/login?err=github`)
-    }
-  })(req, res, next)
-})
 
 router.post('/register', async (req, res) => {
   try {
@@ -219,12 +171,7 @@ router.get('/me', async (req, res) => {
 })
 
 router.post('/logout', (req, res) => {
-  const opts = { 
-    sameSite: 'none', 
-    secure: true, 
-    path: '/', 
-    ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}) 
-  }
+  const opts = { sameSite: 'none', secure: true, path: '/', ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}) }
   res.clearCookie('token', opts)
   res.json({ ok: true })
 })
