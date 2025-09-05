@@ -1,4 +1,3 @@
-// frontend/src/api/client.js
 import axios from 'axios'
 
 const RAW = import.meta.env.VITE_API_BASE || ''
