@@ -1,42 +1,46 @@
-// frontend/src/store/auth.js
 import { create } from 'zustand'
-import api, { setAuthToken as setAxiosAuth } from '../api/client'
+import api, { setAuthToken } from '../api/client'
 
 export const useAuth = create((set, get) => ({
   user: null,
-  loading: false,
+  loading: true,
 
-  setUser: (user) => set({ user }),
-
-  // Save/remove JWT and wire Axios header
-  setToken: (token) => {
-    if (token) {
-      localStorage.setItem('auth_token', token)
-      setAxiosAuth(token)
-    } else {
-      localStorage.removeItem('auth_token')
-      setAxiosAuth(null)
-    }
-  },
-
-  // Fetch current user using cookie or Authorization header
-  loadMe: async () => {
-    set({ loading: true })
+  async loadMe() {
     try {
       const { data } = await api.get('/api/auth/me')
-      set({ user: data || null })
+      set({ user: data || null, loading: false })
     } catch {
-      set({ user: null })
-    } finally {
-      set({ loading: false })
+      set({ user: null, loading: false })
     }
   },
 
-  logout: async () => {
-    try { await api.post('/api/auth/logout') } catch {}
-    localStorage.removeItem('auth_token')
-    setAxiosAuth(null)
-    set({ user: null })
-    window.location.assign('/')
+  async hydrate() {
+
+    const saved = localStorage.getItem('auth_token')
+    if (saved) setAuthToken(saved)
+    return get().loadMe()
   },
+
+  loginGoogle(redirect='/profile') {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/google?redirect=${encodeURIComponent(redirect)}`
+  },
+
+  loginGithub(redirect='/profile') {
+    const base = (import.meta.env.VITE_API_BASE || '').replace(/\/+$/,'').replace(/\/api$/i,'')
+    window.location.href = `${base}/api/auth/github?redirect=${encodeURIComponent(redirect)}`
+  },
+
+  async logout() {
+    try { await api.post('/api/auth/logout') } finally {
+      setAuthToken(null)
+      set({ user: null })
+      window.location.href = '/'
+    }
+  },
+
+  setUser(u) { set({ user: u }) },
+
+  setToken(t) { setAuthToken(t) }
 }))
+
