@@ -11,17 +11,8 @@ export default function OAuthCatch() {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
     const token = hash.get('token')
     const rd = hash.get('rd') || '/profile'
-
-
-    if (window.history && window.history.replaceState) {
-      const url = window.location.pathname + window.location.search
-      window.history.replaceState(null, '', url)
-    }
-
-    (async () => {
-      if (token) {
-        setToken(token)
-      }
+    if (token) setToken(token)
+    ;(async () => {
       await loadMe()
       nav(rd, { replace: true })
     })()
