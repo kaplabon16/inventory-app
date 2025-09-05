@@ -1,3 +1,4 @@
+// frontend/src/pages/ItemPage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'
@@ -54,6 +55,17 @@ export default function ItemPage() {
       }
       alert('Save failed')
       await load()
+    }
+  }
+
+  const deleteItem = async () => {
+    if (!canWrite) return
+    if (!confirm('Delete this item? This cannot be undone.')) return
+    try {
+      await api.delete(`/api/inventories/${id}/items/${itemId}`)
+      nav(`/inventories/${id}`, { replace: true })
+    } catch {
+      alert('Delete failed')
     }
   }
 
@@ -170,7 +182,7 @@ export default function ItemPage() {
   return (
     <div className="grid max-w-3xl gap-3 p-4 mx-auto">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex-1 max-w-xs">
           <b>ID:</b>{' '}
           <input
             className="w-full px-2 py-1 border rounded"
@@ -188,21 +200,24 @@ export default function ItemPage() {
         <div key={`${f.group}-${f.slot}-${i}`}>{inputFor(f)}</div>
       ))}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button onClick={save} className="px-3 py-1 border rounded" disabled={!canWrite}>
           Save
         </button>
         <button
-          onClick={async () => {
-            if (!canWrite) return
-            await api.delete(`/api/inventories/${id}/items/${itemId}`)
-            nav(`/inventories/${id}`, { replace: true })
-          }}
+          onClick={() => nav(`/inventories/${id}`)}
           className="px-3 py-1 border rounded"
-          disabled={!canWrite}
         >
-          Delete
+          Cancel
         </button>
+        {canWrite && (
+          <button
+            onClick={deleteItem}
+            className="px-3 py-1 text-red-600 border border-red-600 rounded"
+          >
+            Delete
+          </button>
+        )}
       </div>
     </div>
   )
