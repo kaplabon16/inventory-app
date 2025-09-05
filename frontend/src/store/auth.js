@@ -15,7 +15,7 @@ export const useAuth = create((set, get) => ({
   },
 
   async hydrate() {
-    // if token persisted, attach before first /me
+
     const saved = localStorage.getItem('auth_token')
     if (saved) setAuthToken(saved)
     return get().loadMe()
