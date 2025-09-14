@@ -18,8 +18,10 @@ import searchRoutes from './routes/searchRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
 import uploadRoutes from './routes/uploadRoutes.js'
+import salesforceRoutes from './routes/integrations.salesforce.js'
 
-// NEW
+
+
 import publicApiRoutes from './routes/publicApiRoutes.js'
 import salesforceRoutes from './routes/integrations/salesforceRoutes.js'
 import supportRoutes from './routes/supportRoutes.js'
@@ -27,7 +29,8 @@ import supportRoutes from './routes/supportRoutes.js'
 const app = express()
 app.set('trust proxy', 1)
 
-// static uploads
+
+
 const UP = path.resolve('uploads')
 if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
 
@@ -54,7 +57,7 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 app.use('/api/upload', uploadRoutes)
 
-// NEW mounts
+
 app.use('/api', publicApiRoutes)
 app.use('/api/integrations/salesforce', salesforceRoutes)
 app.use('/api/support', supportRoutes)
