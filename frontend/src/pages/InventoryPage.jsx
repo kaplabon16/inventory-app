@@ -383,34 +383,62 @@ export default function InventoryPage() {
         </>
       )}
 
-      {tab === 'settings' && (
-        <div className="grid gap-3 mt-3">
-          <label className="grid gap-1">
-            <span>Description</span>
-            {canEdit ? (
-              <MarkdownBox value={inv.description || ''} onChange={(v) => setInv({ ...inv, description: v })} />
-            ) : (
-              <div className="p-3 prose border rounded dark:prose-invert">{inv.description || <i>(no description)</i>}</div>
-            )}
-          </label>
-
-          {canEdit && (
-            <div className="flex gap-2 pt-2">
-              <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded">Save</button>
-              <button
-                onClick={async () => {
-                  if (!confirm('Delete this inventory? This cannot be undone.')) return
-                  await api.delete(`/api/inventories/${id}`)
-                  nav('/profile')
-                }}
-                className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded"
-              >
-                Delete inventory
-              </button>
-            </div>
-          )}
-        </div>
+     {tab === 'settings' && (
+  <div className="grid gap-3 mt-3">
+    <label className="grid gap-1">
+      <span>Description</span>
+      {canEdit ? (
+        <MarkdownBox value={inv.description || ''} onChange={(v) => setInv({ ...inv, description: v })} />
+      ) : (
+        <div className="p-3 prose border rounded dark:prose-invert">{inv.description || <i>(no description)</i>}</div>
       )}
+    </label>
+
+    {/* API Token for Odoo import */}
+    <div className="p-3 border rounded">
+      <div className="mb-2 font-medium">External API Access Token (for Odoo import)</div>
+      <div className="mb-2 text-sm text-gray-600">
+        Generate a token and use it inside your Odoo app to import aggregated inventory stats.
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          className="px-3 py-1 text-sm border rounded"
+          onClick={async ()=>{
+            try {
+              const { data } = await api.post(`/api/inventories/${id}/api-token`)
+              const url = `${window.location.origin}/api/public/inventory-aggregate?token=${encodeURIComponent(data.token)}`
+              await navigator.clipboard.writeText(url)
+              alert(`Token created. Import URL copied to clipboard:\n\n${url}`)
+            } catch (e) {
+              alert(e?.response?.data?.error || 'Failed to create token')
+            }
+          }}
+          disabled={!canEdit}
+        >
+          Generate / Regenerate Token
+        </button>
+        <span className="text-xs text-gray-500">The import URL will be copied to your clipboard.</span>
+      </div>
+    </div>
+
+    {canEdit && (
+      <div className="flex gap-2 pt-2">
+        <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded">Save</button>
+        <button
+          onClick={async () => {
+            if (!confirm('Delete this inventory? This cannot be undone.')) return
+            await api.delete(`/api/inventories/${id}`)
+            nav('/profile')
+          }}
+          className="px-3 py-1 text-sm text-red-600 border border-red-600 rounded"
+        >
+          Delete inventory
+        </button>
+      </div>
+    )}
+  </div>
+)}
+
 
       {tab === 'customId' && (
         <div className="grid gap-4 mt-4">

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <menuitem id="menu_inventory_viewer_root" name="Inventory Viewer" sequence="10"/>
+  <menuitem id="menu_inventory_records" name="Imported Inventories" parent="menu_inventory_viewer_root" action="action_inv_records" sequence="10"/>
+
+  <record id="action_inv_records" model="ir.actions.act_window">
+    <field name="name">Imported Inventories</field>
+    <field name="res_model">inv.record</field>
+    <field name="view_mode">tree,form</field>
+  </record>
+</odoo>

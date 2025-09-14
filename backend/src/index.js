@@ -19,34 +19,32 @@ import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
 import uploadRoutes from './routes/uploadRoutes.js'
 
-const app = express()
+// NEW
+import publicApiRoutes from './routes/publicApiRoutes.js'
+import salesforceRoutes from './routes/integrations/salesforceRoutes.js'
+import supportRoutes from './routes/supportRoutes.js'
 
+const app = express()
 app.set('trust proxy', 1)
 
-
+// static uploads
 const UP = path.resolve('uploads')
 if (!fs.existsSync(UP)) fs.mkdirSync(UP, { recursive: true })
-
 
 app.use((req, res, next) => { res.setHeader('Vary', 'Origin'); next() })
 app.use(cors(corsCfg))
 app.options('*', cors(corsCfg))
-
 
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }))
 app.use(express.json({ limit: '5mb' }))
 app.use(cookieParser())
 app.use(morgan('tiny'))
 
-
 app.use('/uploads', express.static(UP))
-
 
 app.use(optionalAuth)
 
-
 app.get('/api/health', (_req, res) => res.json({ ok: true }))
-
 
 app.use('/api/auth', authRoutes)
 app.use('/api/inventories', inventoryRoutes)
@@ -56,16 +54,18 @@ app.use('/api/admin', adminRoutes)
 app.use('/api/categories', categoriesRoutes)
 app.use('/api/upload', uploadRoutes)
 
+// NEW mounts
+app.use('/api', publicApiRoutes)
+app.use('/api/integrations/salesforce', salesforceRoutes)
+app.use('/api/support', supportRoutes)
 
 app.use((req, res) => res.status(404).json({ error: 'Not found', path: req.originalUrl }))
-
 
 app.use((err, _req, res, _next) => {
   console.error('[server error]', err)
   res.setHeader('Vary','Origin')
   res.status(err.status || 500).json({ error: err.message || 'Server error' })
 })
-
 
 async function ensureDefaultAdmin() {
   const adminEmail = process.env.DEFAULT_ADMIN_EMAIL || 'admin@example.com'

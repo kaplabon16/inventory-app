@@ -66,7 +66,7 @@ export default function InventoryList() {
             {rows.length === 0 ? (
               <tr><td colSpan="4" className="p-6 text-center text-gray-500">No data</td></tr>
             ) : (
-              rows.map(r => (
+              rows.reverse().map(r => (
                 <tr key={r.id} className="border-b cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900" onClick={() => nav(`/inventories/${r.id}`)}>
                   <td className="p-2">{r.title}</td>
                   <td className="p-2">{r.categoryName ?? r.category?.name ?? '-'}</td>

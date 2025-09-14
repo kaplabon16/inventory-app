@@ -4,6 +4,7 @@ import { useAuth } from "../store/auth"
 import ThemeToggle from "./ThemeToggle"
 import LangToggle from "./LangToggle"
 import { useTranslation } from "react-i18next"
+import SupportTicketModal from "./SupportTicketModal"
 
 export default function Header() {
   const { t } = useTranslation()
@@ -14,6 +15,7 @@ export default function Header() {
   const url = new URLSearchParams(location.search)
   const [term, setTerm] = useState(url.get("q") || "")
   const inputRef = useRef(null)
+  const [openTicket, setOpenTicket] = useState(false)
 
   const onSubmit = (e) => {
     e.preventDefault()
@@ -65,6 +67,14 @@ export default function Header() {
         </form>
 
         <div className="flex items-center gap-2 ml-auto">
+          <button
+            onClick={() => setOpenTicket(true)}
+            className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            title="Create support ticket"
+          >
+            Help
+          </button>
+
           {!user ? (
             <>
               <Link to="/login" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
@@ -93,7 +103,8 @@ export default function Header() {
           <LangToggle />
         </div>
       </div>
+
+      <SupportTicketModal open={openTicket} onClose={()=>setOpenTicket(false)} />
     </header>
   )
 }
-

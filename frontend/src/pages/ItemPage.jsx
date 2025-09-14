@@ -1,4 +1,4 @@
-// frontend/src/pages/ItemPage.jsx
+
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import api from '../api/client'

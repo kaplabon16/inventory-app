@@ -53,6 +53,7 @@ model Inventory {
   access    InventoryAccess[]
   comments  Comment[]
   sequence  Sequence?
+  apiTokens InventoryApiToken[]
 
   @@index([ownerId])
 }
@@ -195,4 +196,15 @@ model Like {
   user    User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([itemId, userId])
+}
+
+model InventoryApiToken {
+  id          String   @id @default(cuid())
+  inventoryId String
+  token       String   @unique
+  createdAt   DateTime @default(now())
+
+  inventory Inventory @relation(fields: [inventoryId], references: [id], onDelete: Cascade)
+
+  @@index([inventoryId])
 }

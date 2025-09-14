@@ -1,4 +1,3 @@
-// backend/src/routes/searchRoutes.js
 import { Router } from 'express'
 import { prisma } from '../services/prisma.js'
 

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+  <record id="view_inv_record_tree" model="ir.ui.view">
+    <field name="name">inv.record.tree</field>
+    <field name="model">inv.record</field>
+    <field name="arch" type="xml">
+      <tree>
+        <field name="title"/>
+        <field name="num1_avg"/>
+        <field name="num2_avg"/>
+        <field name="num3_avg"/>
+        <field name="import_url"/>
+      </tree>
+    </field>
+  </record>
+
+  <record id="view_inv_record_form" model="ir.ui.view">
+    <field name="name">inv.record.form</field>
+    <field name="model">inv.record</field>
+    <field name="arch" type="xml">
+      <form string="Imported Inventory">
+        <header>
+          <button name="import_from_url" type="object" string="Re-import" class="oe_highlight" attrs="{'invisible': [('import_url','=',False)]}"/>
+        </header>
+        <sheet>
+          <group>
+            <group>
+              <field name="title"/>
+              <field name="description"/>
+              <field name="import_url"/>
+            </group>
+            <group string="Numbers (avg/min/med/max)">
+              <field name="num1_avg"/><field name="num1_min"/><field name="num1_med"/><field name="num1_max"/>
+              <field name="num2_avg"/><field name="num2_min"/><field name="num2_med"/><field name="num2_max"/>
+              <field name="num3_avg"/><field name="num3_min"/><field name="num3_med"/><field name="num3_max"/>
+            </group>
+          </group>
+          <notebook>
+            <page string="Popular Text JSON">
+              <field name="popular_text_json" nolabel="1" widget="text"/>
+            </page>
+            <page string="Fields JSON">
+              <field name="fields_json" nolabel="1" widget="text"/>
+            </page>
+          </notebook>
+        </sheet>
+      </form>
+    </field>
+  </record>
+</odoo>
