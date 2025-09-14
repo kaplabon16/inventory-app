@@ -51,7 +51,7 @@ export default function SupportTicketModal({ open, onClose, inventoryId }) {
           </select>
         </label>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex justify-end gap-2 ">
           <button className="px-3 py-1 text-sm border rounded" onClick={submit}>Submit</button>
         </div>
       </div>
