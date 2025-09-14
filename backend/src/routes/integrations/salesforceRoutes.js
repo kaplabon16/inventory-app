@@ -44,7 +44,8 @@ router.get('/oauth/start', requireAuth, (req, res) => {
     response_type: 'code',
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI,
-    scope: 'api refresh_token',
+    scope: 'api refresh_token offline_access',
+    prompt: 'consent',
     state,
     code_challenge: challenge,
     code_challenge_method: 'S256'
