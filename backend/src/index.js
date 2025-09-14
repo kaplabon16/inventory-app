@@ -18,8 +18,6 @@ import searchRoutes from './routes/searchRoutes.js'
 import adminRoutes from './routes/adminRoutes.js'
 import categoriesRoutes from './routes/categoriesRoutes.js'
 import uploadRoutes from './routes/uploadRoutes.js'
-import salesforceRoutes from './routes/integrations.salesforce.js'
-
 
 
 import publicApiRoutes from './routes/publicApiRoutes.js'
