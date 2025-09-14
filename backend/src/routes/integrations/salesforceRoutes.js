@@ -1,77 +1,74 @@
 // backend/src/routes/integrations/salesforceRoutes.js
 import { Router } from 'express'
-import fetch from 'node-fetch'
 import crypto from 'crypto'
+import fetch from 'node-fetch'
 import { requireAuth } from '../../middleware/auth.js'
-import { sfRequest } from '../../utils/sfClient.js'
+import path from 'path'
+import fs from 'fs'
 
 const router = Router()
 
-/**
- * Salesforce OAuth / PKCE flow + existing sync-self route.
- *
- * Endpoints added:
- *  GET  /oauth/start    -> redirects the signed-in user to Salesforce authorize (PKCE)
- *  GET  /oauth/callback -> callback that exchanges code for tokens and prints them for manual copy
- *
- * Existing route preserved:
- *  POST /sync-self      -> creates Account + Contact using sfRequest (requires env tokens)
- *
- * Notes:
- * - This file uses an in-memory pkceStore (Map). For production use, replace with Redis/DB/session-backed store.
- * - After a successful token exchange you'll get refresh_token + instance_url. Persist those securely (env, secrets manager or DB)
- *   and restart your backend so sfClient.js (which reads env vars) can use them.
- */
-
-// Config
+// env config (fallbacks)
 const SF_LOGIN_URL = (process.env.SF_LOGIN_URL || 'https://login.salesforce.com').replace(/\/$/, '')
-const SF_CLIENT_ID = process.env.SF_CLIENT_ID
-const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET
-// Allow explicit override or fall back to BACKEND_URL + callback path
+const CLIENT_ID = process.env.SF_CLIENT_ID
+const CLIENT_SECRET = process.env.SF_CLIENT_SECRET || ''
 const REDIRECT_URI = process.env.SF_REDIRECT_URI || (process.env.BACKEND_URL ? `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/integrations/salesforce/oauth/callback` : 'https://inventoryapp-app.up.railway.app/api/integrations/salesforce/oauth/callback')
 
-// Simple in-memory store for PKCE: state -> { verifier, createdAt, userId }
-// TTL & cleanup included. Suitable for dev/testing; use persistent store in production.
-const pkceStore = new Map()
-const PKCE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-
-function base64url(buf) {
-  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '')
-}
-function generateCodeVerifier() {
-  return base64url(crypto.randomBytes(64))
-}
-function codeChallengeFromVerifier(verifier) {
-  return base64url(crypto.createHash('sha256').update(verifier).digest())
-}
-
-// periodic cleanup of old states
-setInterval(() => {
-  const now = Date.now()
-  for (const [k, v] of pkceStore.entries()) {
-    if (now - v.createdAt > PKCE_TTL_MS) pkceStore.delete(k)
+// Simple token store (demo). Replace with DB or secret manager in production.
+const TOKEN_FILE = path.resolve('sf_tokens.json')
+function readTokenStore() {
+  try {
+    if (!fs.existsSync(TOKEN_FILE)) return {}
+    return JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8') || '{}') || {}
+  } catch (e) {
+    return {}
   }
-}, 60 * 1000)
+}
+function saveTokenForUser(userId, payload) {
+  const store = readTokenStore()
+  store[userId] = { ...payload, savedAt: new Date().toISOString() }
+  fs.writeFileSync(TOKEN_FILE, JSON.stringify(store, null, 2), 'utf8')
+}
 
-/**
- * Start PKCE OAuth flow.
- * - requires the user to be authenticated in your app (requireAuth) so we can tie the resulting tokens to that user (optional).
- * - generates state + code_verifier, stores verifier server-side, redirects to Salesforce authorize endpoint with code_challenge.
- */
+// helpers
+function base64url(buf) {
+  return Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+function genVerifierAndChallenge() {
+  const verifier = base64url(crypto.randomBytes(48))
+  const challenge = base64url(crypto.createHash('sha256').update(verifier).digest())
+  return { verifier, challenge }
+}
+function genState() {
+  return crypto.randomBytes(12).toString('hex')
+}
+
+// Public: start the OAuth PKCE flow
+// GET /api/integrations/salesforce/oauth/start
+// NOTE: requireAuth — this ties the resulting tokens to the currently logged-in user (cookie/session preserved)
 router.get('/oauth/start', requireAuth, (req, res) => {
   try {
-    if (!SF_CLIENT_ID) return res.status(500).send('Server misconfigured: missing SF_CLIENT_ID')
+    if (!CLIENT_ID) return res.status(500).json({ error: 'SF_CLIENT_ID not configured' })
 
-    const state = crypto.randomBytes(16).toString('hex')
-    const verifier = generateCodeVerifier()
-    const challenge = codeChallengeFromVerifier(verifier)
+    const { verifier, challenge } = genVerifierAndChallenge()
+    const state = genState()
 
-    // store: tie to current user id (useful later if you want to persist tokens per-user)
-    pkceStore.set(state, { verifier, createdAt: Date.now(), userId: req.user?.id || null })
+    // Store verifier and state in secure, httpOnly cookies (short lived)
+    const cookieOpts = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 5 * 60 * 1000, // 5 minutes
+      path: '/api/integrations/salesforce'
+    }
 
+    res.cookie('sf_pkce_verifier', verifier, cookieOpts)
+    res.cookie('sf_oauth_state', state, cookieOpts)
+
+    // Build authorize URL
     const params = new URLSearchParams({
       response_type: 'code',
-      client_id: SF_CLIENT_ID,
+      client_id: CLIENT_ID,
       redirect_uri: REDIRECT_URI,
       scope: 'api refresh_token',
       state,
@@ -80,129 +77,121 @@ router.get('/oauth/start', requireAuth, (req, res) => {
     })
 
     const authUrl = `${SF_LOGIN_URL}/services/oauth2/authorize?${params.toString()}`
+
+    // Redirect the browser to Salesforce
     return res.redirect(authUrl)
   } catch (e) {
-    console.error('[salesforce oauth start]', e)
-    return res.status(500).send('Failed to start Salesforce OAuth')
+    console.error('[salesforce oauth/start]', e)
+    return res.status(500).json({ error: 'SF_OAUTH_START_FAILED', message: e.message })
   }
 })
 
-/**
- * OAuth callback. Exchanges code for tokens using the stored code_verifier.
- * On success it returns a small HTML page with the refresh_token and instance_url and instructions
- * to paste them into your server env (or persist them however you prefer).
- *
- * IMPORTANT: Persist refresh_token & instance_url securely, then set SF_REFRESH_TOKEN & SF_INSTANCE_URL (and SF_CLIENT_ID/SECRET)
- * in your server environment and restart the backend so that sfClient.js can use them.
- */
-router.get('/oauth/callback', async (req, res) => {
+// Callback to receive code from Salesforce and exchange it
+// GET /api/integrations/salesforce/oauth/callback
+router.get('/oauth/callback', requireAuth, async (req, res) => {
   try {
-    const { code, state, error, error_description } = req.query || {}
-    if (error) {
-      console.error('[salesforce oauth cb] error:', error, error_description)
-      return res.status(400).send(`<pre>OAuth error: ${String(error)} ${String(error_description || '')}</pre>`)
+    const code = (req.query.code || '').toString()
+    const returnedState = (req.query.state || '').toString()
+    const cookieState = req.cookies?.sf_oauth_state
+    const verifier = req.cookies?.sf_pkce_verifier
+
+    if (!code) {
+      return res.status(400).json({ error: 'MISSING_CODE' })
+    }
+    if (!returnedState || !cookieState || returnedState !== cookieState) {
+      return res.status(400).json({ error: 'INVALID_OR_EXPIRED_STATE', message: 'State is missing, mismatched, or expired. Start the flow again.' })
+    }
+    if (!verifier) {
+      return res.status(400).json({ error: 'MISSING_CODE_VERIFIER', message: 'PKCE verifier missing or expired. Start the flow again.' })
+    }
+    if (!CLIENT_ID) {
+      return res.status(500).json({ error: 'SF_CLIENT_ID not configured' })
     }
 
-    if (!code || !state) {
-      return res.status(400).json({ error: 'MISSING_CODE_OR_STATE' })
-    }
-
-    const rec = pkceStore.get(state)
-    if (!rec) {
-      return res.status(400).json({ error: 'INVALID_OR_EXPIRED_STATE' })
-    }
-
-    const code_verifier = rec.verifier
-    // cleanup used state
-    pkceStore.delete(state)
-
-    // Exchange code for tokens
+    // Exchange authorization code for tokens
     const tokenUrl = `${SF_LOGIN_URL}/services/oauth2/token`
-    const form = new URLSearchParams()
-    form.set('grant_type', 'authorization_code')
-    form.set('code', code)
-    form.set('client_id', SF_CLIENT_ID)
-    // include client_secret if present for web apps that have one; public clients omit it
-    if (SF_CLIENT_SECRET) form.set('client_secret', SF_CLIENT_SECRET)
-    form.set('redirect_uri', REDIRECT_URI)
-    form.set('code_verifier', code_verifier)
+    const body = new URLSearchParams({
+      grant_type: 'authorization_code',
+      code,
+      client_id: CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      code_verifier: verifier,
+    })
+    // include client_secret if present (confidential client configured)
+    if (CLIENT_SECRET) body.set('client_secret', CLIENT_SECRET)
 
     const tokenRes = await fetch(tokenUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: form.toString()
+      body: body.toString()
     })
 
-    const txt = await tokenRes.text()
     if (!tokenRes.ok) {
-      console.error('[salesforce token exchange] failed', tokenRes.status, txt)
-      // Try to return the body to help debugging
-      return res.status(500).send(`<pre>Token exchange failed (${tokenRes.status}):\n\n${txt}</pre>`)
+      const text = await tokenRes.text()
+      console.error('[salesforce token exchange] status', tokenRes.status, text)
+      // Clear cookies to avoid reuse of invalid state/verifier
+      res.clearCookie('sf_pkce_verifier', { path: '/api/integrations/salesforce' })
+      res.clearCookie('sf_oauth_state', { path: '/api/integrations/salesforce' })
+      return res.status(500).json({ error: 'TOKEN_EXCHANGE_FAILED', status: tokenRes.status, body: text })
     }
 
-    const json = JSON.parse(txt)
+    const tokenJson = await tokenRes.json()
+    // tokenJson typically contains: access_token, refresh_token (if allowed), instance_url, id, issued_at, signature, etc.
 
-    // json typically contains: access_token, refresh_token, instance_url, id, issued_at, signature, token_type
-    const refreshToken = json.refresh_token
-    const instanceUrl = json.instance_url
+    // Persist tokens for the current user (demo: write to sf_tokens.json)
+    const userId = req.user?.id || 'anonymous'
+    saveTokenForUser(userId, {
+      access_token: tokenJson.access_token,
+      refresh_token: tokenJson.refresh_token || null,
+      instance_url: tokenJson.instance_url || null,
+      scope: tokenJson.scope || null,
+      id_token: tokenJson.id_token || null,
+      raw: tokenJson
+    })
 
-    // WARN: we do not persist tokens for you automatically. Persist securely!
-    // Provide user-friendly HTML to copy tokens to server env or to instruct next steps.
-    const html = `
+    // wipe cookies used in the flow
+    res.clearCookie('sf_pkce_verifier', { path: '/api/integrations/salesforce' })
+    res.clearCookie('sf_oauth_state', { path: '/api/integrations/salesforce' })
+
+    // Return a friendly HTML / JSON response
+    // For browser convenience show a simple success page with instructions
+    return res.send(`
       <html>
-        <head><meta charset="utf-8"><title>Salesforce OAuth Complete</title></head>
-        <body style="font-family:system-ui, -apple-system, 'Segoe UI', Roboto, Arial;line-height:1.5;padding:24px;">
-          <h2>Salesforce OAuth completed</h2>
-          <p>Copy these values into your server environment (or persist to your secret store / DB) and then restart the backend.</p>
-
-          <h3>Environment variables to set</h3>
-          <pre style="background:#f4f4f4;padding:12px;border-radius:6px;">
-SF_CLIENT_ID=${SF_CLIENT_ID || ''}
-SF_CLIENT_SECRET=${SF_CLIENT_SECRET || ''}
-SF_REFRESH_TOKEN=${refreshToken || '<none returned>'}
-SF_INSTANCE_URL=${instanceUrl || '<none returned>'}
-SF_LOGIN_URL=${SF_LOGIN_URL}
-          </pre>
-
-          <p><b>Notes:</b></p>
-          <ul>
-            <li>If <code>refresh_token</code> is missing, ensure your Connected App allows the <em>refresh_token</em> scope and the user granted offline access.</li>
-            <li>For production usage persist these securely (secrets manager, database encrypted column, etc.).</li>
-            <li>Once saved, restart your backend so <code>sfClient.js</code> (which reads process.env) can refresh access tokens and make API calls.</li>
-          </ul>
-
-          <h3>Raw response (for debugging)</h3>
-          <pre style="background:#111;color:#cfc;padding:12px;border-radius:6px;white-space:pre-wrap;">${JSON.stringify(json, null, 2)}</pre>
-
-          <p style="margin-top:16px;"><a href="/">Return to app</a></p>
+        <head><meta charset="utf-8"><title>Salesforce connected</title></head>
+        <body style="font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif;max-width:720px;margin:40px;">
+          <h2>Salesforce connected</h2>
+          <p>Tokens were received and saved for user <strong>${userId}</strong>.</p>
+          <p><b>Important:</b> A <code>refresh_token</code> will be present only if your Connected App and scope allow it. If a refresh token was returned it is stored to <code>sf_tokens.json</code> in your project root (demo only).</p>
+          <pre style="background:#f6f8fa;padding:12px;border-radius:6px;overflow:auto">${JSON.stringify({
+            has_refresh_token: !!tokenJson.refresh_token,
+            instance_url: tokenJson.instance_url
+          }, null, 2)}</pre>
+          <p>Close this tab and return to the app.</p>
         </body>
       </html>
-    `
-    return res.status(200).send(html)
+    `)
   } catch (e) {
-    console.error('[salesforce oauth callback error]', e)
-    return res.status(500).send(`<pre>OAuth callback failed: ${String(e?.message || e)}</pre>`)
+    console.error('[salesforce oauth/callback]', e)
+    return res.status(500).json({ error: 'SF_OAUTH_CALLBACK_FAILED', message: e.message })
   }
 })
 
 /**
- * Existing sync-self route preserved.
- * Creates an Account and Contact in Salesforce using the sfRequest helper.
- * Requires that your server already has SF_CLIENT_ID, SF_CLIENT_SECRET (optional), SF_REFRESH_TOKEN and SF_INSTANCE_URL
- * configured so sfClient.js can refresh and produce an access token.
+ * POST /api/integrations/salesforce/sync-self
+ * (existing API kept for account/contact creation — uses sfClient.sfRequest)
+ * NOTE: we keep your original sync-self route but it will expect a working SF_REFRESH_TOKEN
+ * stored in environment or available to sfClient.
  */
+import { sfRequest } from '../../utils/sfClient.js'
 router.post('/sync-self', requireAuth, async (req, res) => {
   try {
     const me = req.user
     const { company = me.name || 'Individual', phone = '', title = '' } = req.body || {}
 
-    // 1) Create Account
     const account = await sfRequest('/sobjects/Account', {
       method: 'POST',
       body: { Name: company, Phone: phone }
     })
-
-    // 2) Create Contact linked to the Account
     const contact = await sfRequest('/sobjects/Contact', {
       method: 'POST',
       body: {
@@ -217,8 +206,7 @@ router.post('/sync-self', requireAuth, async (req, res) => {
     res.json({ ok: true, accountId: account?.id, contactId: contact?.id })
   } catch (e) {
     console.error('[salesforce sync-self]', e)
-    // if sfClient threw, it should contain helpful message; forward a concise response
-    return res.status(500).json({ error: 'SF_SYNC_FAILED', message: e?.message || String(e) })
+    res.status(500).json({ error: 'SF_SYNC_FAILED', message: e.message })
   }
 })
 
