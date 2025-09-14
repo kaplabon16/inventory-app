@@ -15,16 +15,24 @@ export default function Profile() {
   const [owned, setOwned] = useState([])
   const [write, setWrite] = useState([])
 
-  // Salesforce form + status
+  // Salesforce modal + form + status
+  const [sfOpen, setSfOpen] = useState(false)
+  const [hasSF, setHasSF] = useState(false)
   const [company, setCompany] = useState(user?.name || "")
   const [phone, setPhone] = useState("")
   const [title, setTitle] = useState("")
   const [msg, setMsg] = useState("")
   const [err, setErr] = useState("")
 
-  // Keep company prefilled from user when user changes
+  // Prefill + detect if already integrated (supports a few common shapes)
   useEffect(() => {
     setCompany(user?.name || "")
+    const already =
+      !!user?.salesforceContactId ||
+      !!user?.salesforceAccountId ||
+      !!user?.integrations?.salesforce?.contactId ||
+      !!user?.crm?.salesforce?.contactId
+    setHasSF(already)
   }, [user])
 
   // Load profile/inventories
@@ -57,8 +65,13 @@ export default function Profile() {
     setMsg(""); setErr("")
     try {
       const { data } = await api.post(apiUrl("/integrations/salesforce/sync-self"), { company, phone, title })
-      if (data?.ok) setMsg(`Synced to Salesforce. Account: ${data.accountId}, Contact: ${data.contactId}`)
-      else setErr("Unexpected response")
+      if (data?.ok) {
+        setMsg(`Synced to Salesforce. Account: ${data.accountId}, Contact: ${data.contactId}`)
+        setHasSF(true)
+        setSfOpen(false)
+      } else {
+        setErr("Unexpected response")
+      }
     } catch (e) {
       setErr(e?.response?.data?.message || e?.response?.data?.error || "Failed to sync")
     }
@@ -86,49 +99,82 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Salesforce card */}
-      <div className="max-w-2xl p-4 mt-2 border rounded">
-        <div className="mb-2 text-lg font-semibold">Salesforce CRM</div>
-        <p className="mb-3 text-sm text-gray-600">
-          Create an Account + linked Contact in your Salesforce Dev org.
-        </p>
-
-        {msg && <div className="mb-2 text-sm text-green-600">{msg}</div>}
-        {err && <div className="mb-2 text-sm text-red-600">{err}</div>}
-
-        <div className="grid gap-2">
-          <label className="grid gap-1">
-            <span className="text-sm">Company (Account Name)</span>
-            <input
-              className="px-2 py-1 border rounded"
-              value={company}
-              onChange={(e) => setCompany(e.target.value)}
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-sm">Phone</span>
-            <input
-              className="px-2 py-1 border rounded"
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-            />
-          </label>
-          <label className="grid gap-1">
-            <span className="text-sm">Title (for Contact)</span>
-            <input
-              className="px-2 py-1 border rounded"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </label>
-        </div>
-
-        <div className="flex justify-end mt-3">
-          <button className="px-3 py-1 text-sm border rounded" onClick={syncSF}>
-            Create in Salesforce
+      {/* Salesforce trigger button (hidden once integrated) */}
+      {!hasSF && (
+        <div className="flex justify-end">
+          <button
+            className="px-3 py-1 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
+            onClick={() => { setErr(""); setMsg(""); setSfOpen(true) }}
+          >
+            Connect Salesforce
           </button>
         </div>
-      </div>
+      )}
+
+      {/* Modal */}
+      {sfOpen && !hasSF && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          aria-modal="true"
+          role="dialog"
+        >
+          <div className="absolute inset-0 bg-black/40" onClick={() => setSfOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg p-4 bg-white rounded shadow-lg dark:bg-gray-900">
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-lg font-semibold">Salesforce CRM</div>
+              <button
+                className="px-2 py-1 text-sm border rounded"
+                onClick={() => setSfOpen(false)}
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+            <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
+              Create an Account + linked Contact in your Salesforce Dev org.
+            </p>
+
+            {msg && <div className="mb-2 text-sm text-green-600">{msg}</div>}
+            {err && <div className="mb-2 text-sm text-red-600">{err}</div>}
+
+            <div className="grid gap-2">
+              <label className="grid gap-1">
+                <span className="text-sm">Company (Account Name)</span>
+                <input
+                  className="px-2 py-1 border rounded"
+                  value={company}
+                  onChange={(e) => setCompany(e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm">Phone</span>
+                <input
+                  className="px-2 py-1 border rounded"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
+              </label>
+              <label className="grid gap-1">
+                <span className="text-sm">Title (for Contact)</span>
+                <input
+                  className="px-2 py-1 border rounded"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                />
+              </label>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-3">
+              <button className="px-3 py-1 text-sm border rounded" onClick={() => setSfOpen(false)}>
+                Cancel
+              </button>
+              <button className="px-3 py-1 text-sm text-white bg-blue-600 border rounded hover:bg-blue-700" onClick={syncSF}>
+                Create in Salesforce
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
