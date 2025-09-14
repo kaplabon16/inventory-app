@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import crypto from 'crypto'
 import { prisma } from '../services/prisma.js'
 import { requireAuth, optionalAuth } from '../middleware/auth.js'
 import { isOwnerOrAdmin, canWriteInventory } from '../utils/validators.js'
@@ -8,7 +9,6 @@ const router = Router()
 router.use(optionalAuth)
 
 const setNoStore = (res) => res.set('Cache-Control', 'no-store, max-age=0')
-
 
 router.get('/public-recent', async (req, res) => {
   setNoStore(res)
@@ -98,7 +98,6 @@ router.get('/', optionalAuth, async (req, res) => {
   })))
 })
 
-
 router.post('/', requireAuth, async (req, res) => {
   const { title, description, categoryId } = req.body || {}
   const cat = await prisma.category.findUnique({ where: { id: Number(categoryId || 0) } })
@@ -113,7 +112,6 @@ router.post('/', requireAuth, async (req, res) => {
   })
   res.json(inv)
 })
-
 
 function typeLabelToKey(t) {
   switch (t) {
@@ -191,7 +189,6 @@ router.get('/:id', async (req, res) => {
   })
 })
 
-
 router.put('/:id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -226,7 +223,6 @@ router.delete('/:id', requireAuth, async (req, res) => {
   await prisma.inventory.delete({ where: { id: inv.id } })
   res.json({ ok: true })
 })
-
 
 router.post('/:id/fields', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
@@ -272,7 +268,6 @@ router.post('/:id/fields', requireAuth, async (req, res) => {
   res.json({ ok: true, message: 'Saved field config' })
 })
 
-
 router.post('/:id/custom-id', requireAuth, async (req, res) => {
   const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -298,7 +293,6 @@ router.post('/:id/custom-id', requireAuth, async (req, res) => {
   const saved = await prisma.customIdElement.findMany({ where: { inventoryId: inv.id }, orderBy: { order: 'asc' } })
   res.json({ ok: true, elements: saved })
 })
-
 
 async function getInvWithAccess(id) {
   const [inv, access] = await Promise.all([
@@ -424,7 +418,6 @@ router.delete('/:id/items/:itemId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-
 router.post('/:id/items/:itemId/like', requireAuth, async (req, res) => {
   const { inv } = await getInvWithAccess(req.params.id)
   if (!inv) return res.status(404).json({ error: 'Not found' })
@@ -507,6 +500,23 @@ router.delete('/:id/access/:userId', requireAuth, async (req, res) => {
     where: { inventoryId_userId: { inventoryId: inv.id, userId: req.params.userId } }
   })
   res.json({ ok: true })
+})
+
+// ===== API token generation for external/public aggregate =====
+function b64url(bytes) {
+  return bytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/,'')
+}
+
+router.post('/:id/api-token', requireAuth, async (req, res) => {
+  const inv = await prisma.inventory.findUnique({ where: { id: req.params.id } })
+  if (!inv) return res.status(404).json({ error: 'Not found' })
+  if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
+
+  // rotate: one active token per inventory
+  await prisma.inventoryApiToken.deleteMany({ where: { inventoryId: inv.id } })
+  const token = b64url(crypto.randomBytes(24))
+  const row = await prisma.inventoryApiToken.create({ data: { inventoryId: inv.id, token } })
+  res.json({ ok: true, token: row.token })
 })
 
 router.get('/:id/stats', async (req, res) => {
