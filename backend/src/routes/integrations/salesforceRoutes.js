@@ -2,7 +2,7 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import fetch from 'node-fetch'
-import { requireAuth, optionalAuth } from '../../middleware/auth.js' // <-- imported optionalAuth
+import { requireAuth } from '../../middleware/auth.js'
 import path from 'path'
 import fs from 'fs'
 
@@ -40,12 +40,40 @@ function genVerifierAndChallenge() {
   return { verifier, challenge }
 }
 function genState() {
-  return crypto.randomBytes(12).toString('hex')
+  return crypto.randomBytes(16).toString('hex')
 }
+
+// In-memory flow store keyed by state. Each entry: { userId, verifier, expiresAt }
+// This is short-lived and only used to validate callback. In production use DB or cache.
+const flowStore = new Map()
+const FLOW_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
+function storeFlow(state, obj) {
+  const expiresAt = Date.now() + FLOW_TTL_MS
+  flowStore.set(state, { ...obj, expiresAt })
+}
+function getAndRemoveFlow(state) {
+  const v = flowStore.get(state)
+  if (!v) return null
+  // ensure not expired
+  if (Date.now() > v.expiresAt) {
+    flowStore.delete(state)
+    return null
+  }
+  flowStore.delete(state)
+  return v
+}
+// periodic cleanup
+setInterval(() => {
+  const now = Date.now()
+  for (const [k, v] of flowStore.entries()) {
+    if (v.expiresAt < now) flowStore.delete(k)
+  }
+}, 60 * 1000)
 
 // Public: start the OAuth PKCE flow
 // GET /api/integrations/salesforce/oauth/start
-// NOTE: requireAuth — this ties the resulting tokens to the currently logged-in user (cookie/session preserved)
+// NOTE: requireAuth — this ties the resulting tokens to the currently logged-in user
 router.get('/oauth/start', requireAuth, (req, res) => {
   try {
     if (!CLIENT_ID) return res.status(500).json({ error: 'SF_CLIENT_ID not configured' })
@@ -53,17 +81,8 @@ router.get('/oauth/start', requireAuth, (req, res) => {
     const { verifier, challenge } = genVerifierAndChallenge()
     const state = genState()
 
-    // Store verifier and state in secure, httpOnly cookies (short lived)
-    const cookieOpts = {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: 5 * 60 * 1000, // 5 minutes
-      path: '/api/integrations/salesforce'
-    }
-
-    res.cookie('sf_pkce_verifier', verifier, cookieOpts)
-    res.cookie('sf_oauth_state', state, cookieOpts)
+    // Store server-side keyed by state so callback doesn't need the user's cookie.
+    storeFlow(state, { userId: req.user?.id || 'anonymous', verifier })
 
     // Build authorize URL
     const params = new URLSearchParams({
@@ -88,20 +107,29 @@ router.get('/oauth/start', requireAuth, (req, res) => {
 
 // Callback to receive code from Salesforce and exchange it
 // GET /api/integrations/salesforce/oauth/callback
-// NOTE: TEMPORARY: use optionalAuth so the callback works even if the app session cookie isn't present
-router.get('/oauth/callback', optionalAuth, async (req, res) => {
+// NOTE: we DO NOT requireAuth here because the browser redirect may not include the user's session cookie.
+// Instead we validate using the server-side stored `state`.
+router.get('/oauth/callback', async (req, res) => {
   try {
     const code = (req.query.code || '').toString()
     const returnedState = (req.query.state || '').toString()
-    const cookieState = req.cookies?.sf_oauth_state
-    const verifier = req.cookies?.sf_pkce_verifier
 
     if (!code) {
       return res.status(400).json({ error: 'MISSING_CODE' })
     }
-    if (!returnedState || !cookieState || returnedState !== cookieState) {
+    if (!returnedState) {
+      return res.status(400).json({ error: 'INVALID_OR_EXPIRED_STATE', message: 'State is missing. Start the flow again.' })
+    }
+
+    // fetch and remove the stored flow by state
+    const flow = getAndRemoveFlow(returnedState)
+    if (!flow) {
       return res.status(400).json({ error: 'INVALID_OR_EXPIRED_STATE', message: 'State is missing, mismatched, or expired. Start the flow again.' })
     }
+
+    const verifier = flow.verifier
+    const userId = flow.userId || 'anonymous'
+
     if (!verifier) {
       return res.status(400).json({ error: 'MISSING_CODE_VERIFIER', message: 'PKCE verifier missing or expired. Start the flow again.' })
     }
@@ -130,9 +158,6 @@ router.get('/oauth/callback', optionalAuth, async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text()
       console.error('[salesforce token exchange] status', tokenRes.status, text)
-      // Clear cookies to avoid reuse of invalid state/verifier
-      res.clearCookie('sf_pkce_verifier', { path: '/api/integrations/salesforce' })
-      res.clearCookie('sf_oauth_state', { path: '/api/integrations/salesforce' })
       return res.status(500).json({ error: 'TOKEN_EXCHANGE_FAILED', status: tokenRes.status, body: text })
     }
 
@@ -140,7 +165,6 @@ router.get('/oauth/callback', optionalAuth, async (req, res) => {
     // tokenJson typically contains: access_token, refresh_token (if allowed), instance_url, id, issued_at, signature, etc.
 
     // Persist tokens for the current user (demo: write to sf_tokens.json)
-    const userId = req.user?.id || 'anonymous'
     saveTokenForUser(userId, {
       access_token: tokenJson.access_token,
       refresh_token: tokenJson.refresh_token || null,
@@ -150,12 +174,7 @@ router.get('/oauth/callback', optionalAuth, async (req, res) => {
       raw: tokenJson
     })
 
-    // wipe cookies used in the flow
-    res.clearCookie('sf_pkce_verifier', { path: '/api/integrations/salesforce' })
-    res.clearCookie('sf_oauth_state', { path: '/api/integrations/salesforce' })
-
-    // Return a friendly HTML / JSON response
-    // For browser convenience show a simple success page with instructions
+    // Return a friendly HTML response for browser
     return res.send(`
       <html>
         <head><meta charset="utf-8"><title>Salesforce connected</title></head>
