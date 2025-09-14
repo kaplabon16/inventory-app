@@ -2,7 +2,7 @@
 import { Router } from 'express'
 import crypto from 'crypto'
 import fetch from 'node-fetch'
-import { requireAuth } from '../../middleware/auth.js'
+import { requireAuth, optionalAuth } from '../../middleware/auth.js' // <-- imported optionalAuth
 import path from 'path'
 import fs from 'fs'
 
@@ -88,7 +88,8 @@ router.get('/oauth/start', requireAuth, (req, res) => {
 
 // Callback to receive code from Salesforce and exchange it
 // GET /api/integrations/salesforce/oauth/callback
-router.get('/oauth/callback', requireAuth, async (req, res) => {
+// NOTE: TEMPORARY: use optionalAuth so the callback works even if the app session cookie isn't present
+router.get('/oauth/callback', optionalAuth, async (req, res) => {
   try {
     const code = (req.query.code || '').toString()
     const returnedState = (req.query.state || '').toString()
