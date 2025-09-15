@@ -1,5 +1,6 @@
 // backend/src/routes/supportRoutes.js
 import { Router } from 'express'
+import crypto from 'crypto'
 import { requireAuth } from '../middleware/auth.js'
 import { uploadSupportJson } from '../utils/storageUpload.js'
 import { prisma } from '../services/prisma.js'
@@ -7,44 +8,44 @@ import { prisma } from '../services/prisma.js'
 const router = Router()
 
 // POST /api/support/ticket
-// Body: { summary, priority, inventoryId, link }
+// Body: { summary, priority, inventoryId?, link? }
+// Response: { ok: true, uploaded: { provider, path, url }, ticket: payload }
 router.post('/ticket', requireAuth, async (req, res) => {
   try {
-    const { summary = '', priority = 'Average', inventoryId = '', link = '' } = req.body || {}
-    if (!summary) return res.status(400).json({ error: 'SUMMARY_REQUIRED' })
-    if (!['High','Average','Low'].includes(priority)) return res.status(400).json({ error: 'BAD_PRIORITY' })
+    let { summary = '', priority = 'Average', inventoryId = '', link = '' } = req.body || {}
+    summary = String(summary || '').trim()
+    priority = String(priority || 'Average').trim()
 
-    let inventoryTitle = ''
+    if (!summary) return res.status(400).json({ ok: false, error: 'SUMMARY_REQUIRED' })
+    if (!['High', 'Average', 'Low'].includes(priority)) {
+      return res.status(400).json({ ok: false, error: 'BAD_PRIORITY' })
+    }
+
+    // Optional inventory lookup
+    let inventory = null
     if (inventoryId) {
-      const inv = await prisma.inventory.findUnique({ where: { id: inventoryId } })
-      if (inv) inventoryTitle = inv.title
+      const inv = await prisma.inventory.findUnique({ where: { id: String(inventoryId) } })
+      if (inv) inventory = { id: inv.id, title: inv.title }
     }
 
-    // Admin emails: from env first, else all users with ADMIN role
-    const adminEmails = (process.env.ADMIN_EMAILS || '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(Boolean)
-
-    if (adminEmails.length === 0) {
-      const admins = await prisma.user.findMany({ where: { roles: { has: 'ADMIN' } }, select: { email: true } })
-      admins.forEach(a => adminEmails.push(a.email))
-    }
-
+    // Build strict payload schema
+    const ticketId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const createdAt = new Date().toISOString()
     const payload = {
-      reportedBy: { id: req.user.id, name: req.user.name, email: req.user.email },
-      inventory: inventoryTitle,
-      link,
+      reported_by: { id: req.user.id, name: req.user.name, email: req.user.email },
+      inventory: inventory,
+      link: String(link || ''),
       priority,
       summary,
-      admins: adminEmails
+      created_at: createdAt,
+      id: ticketId,
     }
 
     const uploaded = await uploadSupportJson({ filenamePrefix: 'support_ticket', json: payload })
-    res.json({ ok: true, uploaded })
+    res.json({ ok: true, uploaded, ticket: payload })
   } catch (e) {
     console.error('[support ticket]', e)
-    res.status(500).json({ error: 'UPLOAD_FAILED', message: e.message })
+    res.status(500).json({ ok: false, error: e?.message || 'UPLOAD_FAILED' })
   }
 })
 

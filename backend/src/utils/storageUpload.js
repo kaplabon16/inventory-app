@@ -98,10 +98,12 @@ export async function uploadSupportJson({ filenamePrefix = 'support_ticket', jso
   const name = `${filenamePrefix}-${ts}.json`
   const path = `${ROOT}/${y}/${m}/${name}`.replace(/\/+/g, '/')
 
-  const bytes = Buffer.from(JSON.stringify(json, null, 2), 'utf8')
+  // Do not mutate caller's object
+  const safe = JSON.parse(JSON.stringify(json))
+  const bytes = Buffer.from(JSON.stringify(safe, null, 2), 'utf8')
   const meta = await dropboxUploadBytes({ path, bytes })
   let url = null
   try { url = await ensureSharedLink(meta.path_lower || meta.path_display) } catch { /* optional */ }
 
-  return { provider: 'dropbox', path: meta.path_display, id: meta.id, url }
+  return { provider: 'dropbox', path: meta.path_display, url }
 }
