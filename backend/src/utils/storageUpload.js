@@ -96,14 +96,28 @@ export async function uploadSupportJson({ filenamePrefix = 'support_ticket', jso
   const m = String(now.getMonth() + 1).padStart(2, '0')
   const ts = now.toISOString().replace(/[:.]/g, '-')
   const name = `${filenamePrefix}-${ts}.json`
-  const path = `${ROOT}/${y}/${m}/${name}`.replace(/\/+/g, '/')
+  const datedPath = `${ROOT}/${y}/${m}/${name}`.replace(/\/+/g, '/')
+  const flatPath = `${ROOT}/${name}`.replace(/\/+/g, '/')
 
   // Do not mutate caller's object
   const safe = JSON.parse(JSON.stringify(json))
   const bytes = Buffer.from(JSON.stringify(safe, null, 2), 'utf8')
-  const meta = await dropboxUploadBytes({ path, bytes })
-  let url = null
-  try { url = await ensureSharedLink(meta.path_lower || meta.path_display) } catch { /* optional */ }
 
-  return { provider: 'dropbox', path: meta.path_display, url }
+  // Upload to flat folder for simple triggers
+  const metaFlat = await dropboxUploadBytes({ path: flatPath, bytes })
+  let urlFlat = null
+  try { urlFlat = await ensureSharedLink(metaFlat.path_lower || metaFlat.path_display) } catch { /* optional */ }
+
+  // Upload to dated folder for archival
+  const metaDated = await dropboxUploadBytes({ path: datedPath, bytes })
+  let urlDated = null
+  try { urlDated = await ensureSharedLink(metaDated.path_lower || metaDated.path_display) } catch { /* optional */ }
+
+  return {
+    provider: 'dropbox',
+    path: metaDated.path_display,
+    url: urlDated,
+    path_flat: metaFlat.path_display,
+    url_flat: urlFlat,
+  }
 }

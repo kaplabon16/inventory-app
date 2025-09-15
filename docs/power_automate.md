@@ -9,7 +9,8 @@ Prerequisites
 
 Flow steps
 - Trigger: When a file is created (Dropbox)
-  - Folder: `/SupportTickets` (include subfolders)
+  - Folder: `/SupportTickets` (flat)
+  - Add a Condition on the file Name: contains `support_ticket` and ends with `.json`
 - Action: Get file content
 - Action: Parse JSON
   - Use the schema below (matches backend payload):
@@ -72,4 +73,3 @@ Troubleshooting
 - If the flow doesn’t trigger, confirm the Dropbox connector watches the correct parent folder and includes subfolders.
 - Ensure the JSON content is not empty and matches the schema (update the schema if you add fields).
 - For public links, the uploader attempts to create/reuse a shared link; if `url` is null, you can still fetch the file via Dropbox in the flow.
-
