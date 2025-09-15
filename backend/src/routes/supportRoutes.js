@@ -21,14 +21,14 @@ router.post('/ticket', requireAuth, async (req, res) => {
       return res.status(400).json({ ok: false, error: 'BAD_PRIORITY' })
     }
 
-    // Optional inventory lookup
+   
     let inventory = null
     if (inventoryId) {
       const inv = await prisma.inventory.findUnique({ where: { id: String(inventoryId) } })
       if (inv) inventory = { id: inv.id, title: inv.title }
     }
 
-    // Build strict payload schema
+   
     const ticketId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     const createdAt = new Date().toISOString()
     const payload = {

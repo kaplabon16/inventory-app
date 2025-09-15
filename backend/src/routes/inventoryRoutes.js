@@ -516,7 +516,9 @@ router.post('/:id/api-token', requireAuth, async (req, res) => {
   await prisma.inventoryApiToken.deleteMany({ where: { inventoryId: inv.id } })
   const token = b64url(crypto.randomBytes(24))
   const row = await prisma.inventoryApiToken.create({ data: { inventoryId: inv.id, token } })
-  res.json({ ok: true, token: row.token })
+  const base = (process.env.PUBLIC_BASE || process.env.BACKEND_URL || '').replace(/\/$/, '') || 'http://localhost:5045'
+  const url = `${base}/api/public/inventory-aggregate?token=${encodeURIComponent(row.token)}`
+  res.json({ ok: true, token: row.token, url })
 })
 
 router.get('/:id/stats', async (req, res) => {

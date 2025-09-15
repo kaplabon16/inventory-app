@@ -1,26 +1,37 @@
-version: "3.9"
+version: '3.8'
 services:
   db:
-    image: postgres:14
+    image: postgres:15
     environment:
+      POSTGRES_DB: odoo
       POSTGRES_USER: odoo
       POSTGRES_PASSWORD: odoo
-      POSTGRES_DB: postgres
     volumes:
-      - pg_data:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U odoo"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   odoo:
-    image: odoo:18.0
-    depends_on: [db]
+    image: odoo:16
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8069:8069"
     environment:
-      HOST: db
-      USER: odoo
-      PASSWORD: odoo
+      - HOST=db
+      - USER=odoo
+      - PASSWORD=odoo
+      - PGUSER=odoo
     volumes:
-      - ./odoo.conf:/etc/odoo/odoo.conf
       - ./odoo_addons:/mnt/extra-addons
+      - ./odoo.conf:/etc/odoo/odoo.conf
       - odoo_data:/var/lib/odoo
+
 volumes:
-  pg_data:
+  pgdata:
   odoo_data:
+
