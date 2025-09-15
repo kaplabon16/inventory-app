@@ -70,11 +70,12 @@ router.get('/google/callback', async (req, res, next) => {
         return res.redirect(`${frontendBase}/login?err=google`)
       }
 
-      setCookieToken(res, user)
+      const tok = setCookieToken(res, user)
       const rd = normalizeRedirect(
         typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
       )
-      res.redirect(`${frontendBase}${rd}`)
+      // Also pass token via hash to handle browsers that block third-party cookies
+      res.redirect(`${frontendBase}/oauth-catch#token=${tok}&rd=${encodeURIComponent(rd)}`)
     } catch (error) {
       console.error('Google OAuth callback error:', error)
       res.redirect(`${frontendBase}/login?err=google`)
@@ -112,11 +113,12 @@ router.get('/github/callback', async (req, res, next) => {
         return res.redirect(`${frontendBase}/login?err=github`)
       }
 
-      setCookieToken(res, user)
+      const tok = setCookieToken(res, user)
       const rd = normalizeRedirect(
         typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
       )
-      res.redirect(`${frontendBase}${rd}`)
+      // Also pass token via hash to handle browsers that block third-party cookies
+      res.redirect(`${frontendBase}/oauth-catch#token=${tok}&rd=${encodeURIComponent(rd)}`)
     } catch (error) {
       console.error('GitHub OAuth callback error:', error)
       res.redirect(`${frontendBase}/login?err=github`)

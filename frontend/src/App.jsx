@@ -13,6 +13,7 @@ import InventoryPage from "./pages/InventoryPage"
 import ItemPage from "./pages/ItemPage"
 import Admin from "./pages/Admin"
 import Search from "./pages/Search"
+import OAuthCatch from "./pages/OAuthCatch"
 
 import ProtectedRoute from "./routes/ProtectedRoute"
 import AdminRoute from "./routes/AdminRoute"
@@ -30,6 +31,7 @@ export default function App() {
             <Route path="/search" element={<Search />} />
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/oauth-catch" element={<OAuthCatch />} />
 
 
             <Route path="/inventories" element={<InventoryList />} />
