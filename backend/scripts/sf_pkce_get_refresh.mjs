@@ -1,6 +1,3 @@
-// backend/scripts/sf_pkce_get_refresh.mjs
-// Node 18+ required (uses global fetch). PKCE + local callback to get a refresh_token.
-
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -12,19 +9,18 @@ const CLIENT_SECRET = process.env.SF_CLIENT_SECRET || ""; // optional if your Co
 const PORT        = Number(process.env.SF_LOCAL_PORT || 5174);
 const REDIRECT_URI= process.env.SF_REDIRECT || `http://localhost:${PORT}/callback`;
 
-// ---- safeties ----
+
 if (!CLIENT_ID) {
   console.error("❌ Set SF_CLIENT_ID env first.");
   process.exit(1);
 }
 
-// ---- PKCE helpers ----
 const b64url = (buf) => Buffer.from(buf).toString("base64").replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"");
 const codeVerifier = b64url(crypto.randomBytes(48));
 const codeChallenge = b64url(crypto.createHash("sha256").update(codeVerifier).digest());
 const state = crypto.randomBytes(16).toString("hex");
 
-// ---- Build Salesforce authorize URL ----
+
 const params = new URLSearchParams({
   response_type: "code",
   client_id: CLIENT_ID,
@@ -37,7 +33,6 @@ const params = new URLSearchParams({
 });
 const authUrl = `${LOGIN_URL}/services/oauth2/authorize?${params.toString()}`;
 
-// ---- Local HTTP server to receive the callback ----
 const server = http.createServer(async (req, res) => {
   try {
     const url = new URL(req.url, `http://localhost:${PORT}`);
@@ -53,7 +48,7 @@ const server = http.createServer(async (req, res) => {
       return void res.end("Missing/invalid code or state");
     }
 
-    // Exchange code for tokens
+   
     const tokenUrl = `${LOGIN_URL}/services/oauth2/token`;
     const body = new URLSearchParams({
       grant_type: "authorization_code",
@@ -115,11 +110,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log("-----------------------------------------------------");
+  console.log("-----");
   console.log("PKCE local helper ready.");
   console.log("1) Ensure your Connected App has this callback URL:");
   console.log("   ", REDIRECT_URI);
   console.log("2) Open this in a browser, login, and Approve:");
   console.log("   ", authUrl);
-  console.log("-----------------------------------------------------");
+  console.log("--");
 });
