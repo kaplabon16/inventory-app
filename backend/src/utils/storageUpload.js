@@ -1,4 +1,3 @@
-// Dropbox-only uploader using Node 18+ global fetch (no node-fetch).
 import { Buffer } from 'node:buffer'
 
 const PROVIDER = (process.env.SUPPORT_UPLOAD_PROVIDER || 'dropbox').toLowerCase()
@@ -54,7 +53,6 @@ async function dropboxUploadBytes({ path, bytes }) {
 
 async function ensureSharedLink(path) {
   const token = await dropboxToken()
-  // Try to create a shared link
   let res = await fetch('https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings', {
     method: 'POST',
     headers: {
@@ -86,7 +84,6 @@ async function ensureSharedLink(path) {
 }
 
 /**
- * Upload a JSON support ticket to Dropbox and return metadata + public link.
  * @param {{ filenamePrefix?: string, json: any }} param0
  */
 export async function uploadSupportJson({ filenamePrefix = 'support_ticket', json }) {
