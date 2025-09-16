@@ -73,7 +73,7 @@ export default function Header() {
           </Link>
         </nav>
 
-        <SearchForm className="hidden flex-1 max-w-xl ml-3 lg:block" />
+        <SearchForm className="flex-1 hidden max-w-xl ml-3 lg:block" />
 
         <button
           onClick={() => setMenuOpen((v) => !v)}
@@ -81,7 +81,7 @@ export default function Header() {
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
         >
-          {menuOpen ? t("close") : t("menu")}
+          {menuOpen ? t("❌") : t("⏬️")}
         </button>
 
         <div className="items-center hidden gap-2 ml-auto lg:flex">
