@@ -66,9 +66,8 @@ export default function Profile() {
     try {
       const { data } = await api.post(apiUrl("/integrations/salesforce/sync-self"), { company, phone, title })
       if (data?.ok) {
-        setMsg(`Synced to Salesforce. Account: ${data.accountId}, Contact: ${data.contactId}`)
+        setMsg(`Successfully connected to Salesforce. Account: ${data.accountId}, Contact: ${data.contactId}`)
         setHasSF(true)
-        setSfOpen(false)
       } else {
         setErr("Unexpected response")
       }
@@ -112,7 +111,7 @@ export default function Profile() {
       )}
 
       {/* Modal */}
-      {sfOpen && !hasSF && (
+      {sfOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center"
           aria-modal="true"
@@ -121,7 +120,6 @@ export default function Profile() {
           <div className="absolute inset-0 bg-black/40" onClick={() => setSfOpen(false)} />
           <div className="relative z-10 w-full max-w-lg p-4 bg-white rounded shadow-lg dark:bg-gray-900">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-lg font-semibold">Salesforce CRM</div>
               <button
                 className="px-2 py-1 text-sm border rounded"
                 onClick={() => setSfOpen(false)}
@@ -129,6 +127,7 @@ export default function Profile() {
               >
                 ✕
               </button>
+              <div className="text-lg font-semibold">Salesforce CRM</div>
             </div>
             <p className="mb-3 text-sm text-gray-600 dark:text-gray-300">
               Create an Account + linked Contact in your Salesforce Dev org.
@@ -166,10 +165,14 @@ export default function Profile() {
 
             <div className="flex justify-end gap-2 mt-3">
               <button className="px-3 py-1 text-sm border rounded" onClick={() => setSfOpen(false)}>
-                Cancel
+                Close
               </button>
-              <button className="px-3 py-1 text-sm text-white bg-blue-600 border rounded hover:bg-blue-700" onClick={syncSF}>
-                Create in Salesforce
+              <button
+                className="px-3 py-1 text-sm text-white bg-blue-600 border rounded hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={syncSF}
+                disabled={hasSF}
+              >
+                {hasSF ? "Connected" : "Create in Salesforce"}
               </button>
             </div>
           </div>
