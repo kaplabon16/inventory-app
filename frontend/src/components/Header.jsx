@@ -43,10 +43,8 @@ export default function Header() {
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
-  const baseButton = "btn"
-  const primaryButton = "btn btn-primary"
-  const accentButton = "btn btn-accent"
-  const outlineButton = "btn btn-outline"
+  const headerButton = "btn btn-primary h-9 px-3 gap-2 text-xs uppercase tracking-wide"
+  const outlineButton = headerButton
 
   const SearchForm = ({ className }) => (
     <form onSubmit={onSubmit} className={className}>
@@ -64,11 +62,12 @@ export default function Header() {
         />
         <button
           type="submit"
-          className="btn btn-primary h-10 min-w-[3rem] rounded-l-none rounded-r-lg"
+          className={`${headerButton} rounded-l-none rounded-r-lg`}
           aria-label={t("search")}
           title={t("search")}
         >
-          🔎
+          <span aria-hidden="true" className="text-sm">🔍</span>
+          <span className="sr-only">{t("search")}</span>
         </button>
       </div>
     </form>
@@ -79,53 +78,63 @@ export default function Header() {
       <div className="flex items-center max-w-6xl gap-3 px-4 py-3 mx-auto">
         <Link to="/" className="text-xl font-semibold tracking-tight text-indigo-700 dark:text-indigo-300">{t("app")}</Link>
 
-        <nav className="items-center hidden gap-3 ml-2 text-sm lg:flex">
+        <nav className="items-center hidden gap-2 ml-2 lg:flex">
           <Link to="/inventories" className={outlineButton}>
-            {t("inventories")}
+            <span aria-hidden="true">📦</span>
+            <span>{t("inventories")}</span>
           </Link>
         </nav>
 
         <SearchForm className="flex-1 hidden max-w-xl ml-3 lg:block" />
 
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          className={`${outlineButton} ml-auto lg:hidden`}
-          aria-expanded={menuOpen}
-          aria-controls="mobile-menu"
-        >
-          {menuOpen ? "Close" : "Menu"}
-        </button>
+        <div className="ml-auto lg:hidden">
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            className={headerButton}
+            aria-expanded={menuOpen}
+            aria-controls="mobile-menu"
+          >
+            <span aria-hidden="true">{menuOpen ? '✕' : '☰'}</span>
+            <span className="sr-only">{menuOpen ? t("close") : t("menu")}</span>
+          </button>
+        </div>
 
         <div className="items-center hidden gap-2 ml-auto lg:flex">
           <button
             onClick={() => setOpenTicket(true)}
-            className={accentButton}
+            className={headerButton}
             title="Create support ticket"
           >
-            Help
+            <span aria-hidden="true">🆘</span>
+            <span>Help</span>
           </button>
 
           {!user ? (
             <>
-              <Link to="/login" className={primaryButton}>
-                {t("login")}
+              <Link to="/login" className={headerButton}>
+                <span aria-hidden="true">🔑</span>
+                <span>{t("login")}</span>
               </Link>
-              <Link to="/register" className={outlineButton}>
-                {t("register")}
+              <Link to="/register" className={headerButton}>
+                <span aria-hidden="true">📝</span>
+                <span>{t("register")}</span>
               </Link>
             </>
           ) : (
             <>
-              <button onClick={()=>navigate("/profile")} className={primaryButton}>
-                {t("profile")}
+              <button onClick={()=>navigate("/profile")} className={headerButton}>
+                <span aria-hidden="true">👤</span>
+                <span>{t("profile")}</span>
               </button>
               {isAdmin && (
-                <button onClick={()=>navigate('/admin')} className={outlineButton}>
-                  {t("admin")}
+                <button onClick={()=>navigate('/admin')} className={headerButton}>
+                  <span aria-hidden="true">🛠</span>
+                  <span>{t("admin")}</span>
                 </button>
               )}
-              <button onClick={logout} className={accentButton}>
-                {t("logout")}
+              <button onClick={logout} className={headerButton}>
+                <span aria-hidden="true">🚪</span>
+                <span>{t("logout")}</span>
               </button>
             </>
           )}
@@ -136,13 +145,14 @@ export default function Header() {
 
       {menuOpen && (
         <div id="mobile-menu" className="px-4 pb-4 border-t border-gray-200 dark:border-[#1b1b1b] lg:hidden bg-white/95 dark:bg-black">
-          <nav className="flex flex-col gap-2 pt-3 text-sm">
+          <nav className="flex flex-col gap-2 pt-3 text-xs uppercase">
             <Link
               to="/inventories"
-              className={outlineButton}
+              className={`${headerButton} w-full justify-start`}
               onClick={() => setMenuOpen(false)}
             >
-              {t("inventories")}
+              <span aria-hidden="true">📦</span>
+              <span>{t("inventories")}</span>
             </Link>
           </nav>
 
@@ -154,9 +164,10 @@ export default function Header() {
                 setMenuOpen(false)
                 setOpenTicket(true)
               }}
-              className={`${accentButton} justify-start`}
+              className={`${headerButton} w-full justify-start`}
             >
-              Help
+              <span aria-hidden="true">🆘</span>
+              <span>Help</span>
             </button>
 
             {!user ? (
@@ -164,16 +175,18 @@ export default function Header() {
                 <Link
                   to="/login"
                   onClick={() => setMenuOpen(false)}
-                  className={primaryButton}
+                  className={`${headerButton} w-full justify-start`}
                 >
-                  {t("login")}
+                  <span aria-hidden="true">🔑</span>
+                  <span>{t("login")}</span>
                 </Link>
                 <Link
                   to="/register"
                   onClick={() => setMenuOpen(false)}
-                  className={outlineButton}
+                  className={`${headerButton} w-full justify-start`}
                 >
-                  {t("register")}
+                  <span aria-hidden="true">📝</span>
+                  <span>{t("register")}</span>
                 </Link>
               </>
             ) : (
@@ -183,9 +196,10 @@ export default function Header() {
                     setMenuOpen(false)
                     navigate("/profile")
                   }}
-                  className={`${primaryButton} justify-start`}
+                  className={`${headerButton} w-full justify-start`}
                 >
-                  {t("profile")}
+                  <span aria-hidden="true">👤</span>
+                  <span>{t("profile")}</span>
                 </button>
                 {isAdmin && (
                   <button
@@ -193,9 +207,10 @@ export default function Header() {
                       setMenuOpen(false)
                       navigate('/admin')
                     }}
-                    className={`${outlineButton} justify-start`}
+                    className={`${headerButton} w-full justify-start`}
                   >
-                    {t("admin")}
+                    <span aria-hidden="true">🛠</span>
+                    <span>{t("admin")}</span>
                   </button>
                 )}
                 <button
@@ -203,9 +218,10 @@ export default function Header() {
                     setMenuOpen(false)
                     logout()
                   }}
-                  className={`${accentButton} justify-start`}
+                  className={`${headerButton} w-full justify-start`}
                 >
-                  {t("logout")}
+                  <span aria-hidden="true">🚪</span>
+                  <span>{t("logout")}</span>
                 </button>
               </>
             )}
