@@ -31,15 +31,7 @@ export default function SupportTicketModal({ open, onClose, inventoryId }) {
       <div className="w-full max-w-lg p-4 bg-white rounded shadow dark:bg-[#0c0c0c] dark:border dark:border-[#1f1f1f] dark-surface">
         <div className="flex items-center justify-between mb-3">
           <div className="text-lg font-semibold">Create support ticket</div>
-          <button
-            className="icon-btn icon-btn--danger"
-            onClick={onClose}
-            aria-label="Close support ticket"
-          >
-            <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="m6 6 12 12M6 18 18 6" />
-            </svg>
-          </button>
+          <button className="btn btn-outline" onClick={onClose}>Close</button>
         </div>
 
         {err && <div className="mb-2 text-sm text-red-600">{err}</div>}

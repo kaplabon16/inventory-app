@@ -43,10 +43,7 @@ export default function Header() {
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
-  const baseButton = "inline-flex items-center justify-center h-10 min-w-[3rem] px-5 text-sm font-semibold rounded-full shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-  const primaryButton = `${baseButton} bg-blue-600 text-white hover:bg-blue-500 focus-visible:ring-blue-400 dark:bg-blue-400 dark:text-black dark:hover:bg-blue-300`
-  const accentButton = primaryButton
-  const outlineButton = `${baseButton} bg-blue-50 text-blue-600 hover:bg-blue-100 focus-visible:ring-blue-300 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30`
+  const headerButton = "inline-flex items-center justify-center h-10 min-w-[3rem] px-5 text-sm font-semibold rounded-full shadow-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30"
 
   const SearchForm = ({ className }) => (
     <form onSubmit={onSubmit} className={className}>
@@ -64,7 +61,7 @@ export default function Header() {
         />
         <button
           type="submit"
-          className={primaryButton}
+          className={headerButton}
           aria-label={t("search")}
           title={t("search")}
         >
@@ -80,7 +77,7 @@ export default function Header() {
         <Link to="/" className="text-xl font-semibold tracking-tight text-indigo-700 dark:text-indigo-300">{t("app")}</Link>
 
         <nav className="items-center hidden gap-3 ml-2 text-sm lg:flex">
-          <Link to="/inventories" className={outlineButton}>
+          <Link to="/inventories" className={headerButton}>
             {t("inventories")}
           </Link>
         </nav>
@@ -89,7 +86,7 @@ export default function Header() {
 
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className={`${outlineButton} ml-auto lg:hidden`}
+          className={`${headerButton} ml-auto lg:hidden`}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
         >
@@ -99,7 +96,7 @@ export default function Header() {
         <div className="items-center hidden gap-2 ml-auto lg:flex">
           <button
             onClick={() => setOpenTicket(true)}
-            className={accentButton}
+            className={headerButton}
             title="Create support ticket"
           >
             Help
@@ -107,24 +104,24 @@ export default function Header() {
 
           {!user ? (
             <>
-              <Link to="/login" className={primaryButton}>
+              <Link to="/login" className={headerButton}>
                 {t("login")}
               </Link>
-              <Link to="/register" className={outlineButton}>
+              <Link to="/register" className={headerButton}>
                 {t("register")}
               </Link>
             </>
           ) : (
             <>
-              <button onClick={()=>navigate("/profile")} className={primaryButton}>
+              <button onClick={()=>navigate("/profile")} className={headerButton}>
                 {t("profile")}
               </button>
               {isAdmin && (
-                <button onClick={()=>navigate('/admin')} className={outlineButton}>
+                <button onClick={()=>navigate('/admin')} className={headerButton}>
                   {t("admin")}
                 </button>
               )}
-              <button onClick={logout} className={accentButton}>
+              <button onClick={logout} className={headerButton}>
                 {t("logout")}
               </button>
             </>
@@ -139,7 +136,7 @@ export default function Header() {
           <nav className="flex flex-col gap-2 pt-3 text-sm">
             <Link
               to="/inventories"
-              className={outlineButton}
+              className={headerButton}
               onClick={() => setMenuOpen(false)}
             >
               {t("inventories")}
@@ -154,7 +151,7 @@ export default function Header() {
                 setMenuOpen(false)
                 setOpenTicket(true)
               }}
-              className={`${accentButton} justify-start`}
+              className={`${headerButton} justify-start`}
             >
               Help
             </button>
@@ -164,14 +161,14 @@ export default function Header() {
                 <Link
                   to="/login"
                   onClick={() => setMenuOpen(false)}
-                  className={primaryButton}
+                  className={headerButton}
                 >
                   {t("login")}
                 </Link>
                 <Link
                   to="/register"
                   onClick={() => setMenuOpen(false)}
-                  className={outlineButton}
+                  className={headerButton}
                 >
                   {t("register")}
                 </Link>
@@ -183,7 +180,7 @@ export default function Header() {
                     setMenuOpen(false)
                     navigate("/profile")
                   }}
-                  className={`${primaryButton} justify-start`}
+                  className={`${headerButton} justify-start`}
                 >
                   {t("profile")}
                 </button>
@@ -193,7 +190,7 @@ export default function Header() {
                       setMenuOpen(false)
                       navigate('/admin')
                     }}
-                    className={`${outlineButton} justify-start`}
+                    className={`${headerButton} justify-start`}
                   >
                     {t("admin")}
                   </button>
@@ -203,7 +200,7 @@ export default function Header() {
                     setMenuOpen(false)
                     logout()
                   }}
-                  className={`${accentButton} justify-start`}
+                  className={`${headerButton} justify-start`}
                 >
                   {t("logout")}
                 </button>
