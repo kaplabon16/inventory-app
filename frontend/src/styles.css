@@ -117,6 +117,10 @@ button:not(.btn):not(.btn-plain) {
   @apply flex items-center justify-between gap-3;
 }
 
+@media (min-width: 1024px) {
+  .lg\:hidden { display: none !important; }
+}
+
 .table-shell {
   @apply overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-sm dark:bg-[#0b0b0b] dark:border-[#1f1f1f];
 }
