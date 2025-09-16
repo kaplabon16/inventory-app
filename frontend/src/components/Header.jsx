@@ -43,10 +43,10 @@ export default function Header() {
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
-  const baseButton = "inline-flex items-center justify-center h-10 min-w-[3rem] px-4 text-sm font-semibold rounded-lg shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-  const primaryButton = `${baseButton} bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:ring-indigo-400 dark:bg-indigo-400 dark:text-black dark:hover:bg-indigo-300`
-  const accentButton = `${baseButton} bg-emerald-500 text-white hover:bg-emerald-400 focus-visible:ring-emerald-300 dark:bg-emerald-400 dark:text-black dark:hover:bg-emerald-300`
-  const outlineButton = `${baseButton} border border-indigo-500 text-indigo-600 hover:bg-indigo-50 focus-visible:ring-indigo-300 dark:border-indigo-400 dark:text-indigo-200 dark:hover:bg-indigo-500/10`
+  const baseButton = "btn"
+  const primaryButton = "btn btn-primary"
+  const accentButton = "btn btn-accent"
+  const outlineButton = "btn btn-outline"
 
   const SearchForm = ({ className }) => (
     <form onSubmit={onSubmit} className={className}>
@@ -64,7 +64,7 @@ export default function Header() {
         />
         <button
           type="submit"
-          className="flex items-center justify-center h-10 min-w-[3rem] rounded-r-lg bg-indigo-500 px-3 text-white transition-colors hover:bg-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 dark:bg-indigo-400 dark:text-black dark:hover:bg-indigo-300"
+          className="btn btn-primary h-10 min-w-[3rem] rounded-l-none rounded-r-lg"
           aria-label={t("search")}
           title={t("search")}
         >

@@ -37,9 +37,9 @@ export default function Table({ columns, rows, selected, onSelect, rowLink, empt
   }
 
   return (
-    <div className="overflow-auto border rounded">
-      <table className="min-w-full text-sm">
-        <thead className="bg-gray-100 dark:bg-gray-800">
+    <div className="table-shell overflow-x-auto">
+      <table>
+        <thead>
           <tr>
             {onSelect && (
               <th className="w-10 p-2">
@@ -51,13 +51,13 @@ export default function Table({ columns, rows, selected, onSelect, rowLink, empt
                 />
               </th>
             )}
-            {columns.map(c => <th key={c.key} className="p-2 text-left">{c.title}</th>)}
+            {columns.map(c => <th key={c.key} className="text-left">{c.title}</th>)}
           </tr>
         </thead>
         <tbody>
           {rows.length === 0 && (
             <tr>
-              <td colSpan={(columns.length + (onSelect ? 1 : 0))} className="p-6 text-center text-gray-500">
+              <td colSpan={(columns.length + (onSelect ? 1 : 0))} className="p-6 text-center text-slate-500 dark:text-slate-400">
                 {emptyText}
               </td>
             </tr>
@@ -69,7 +69,7 @@ export default function Table({ columns, rows, selected, onSelect, rowLink, empt
             return (
               <tr
                 key={id}
-                className={`border-t ${clickable ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800' : ''}`}
+                className={`${clickable ? 'cursor-pointer' : ''}`}
                 onClick={() => { if (clickable) window.location.assign(rowLink(r)) }}
               >
                 {onSelect && (
@@ -82,7 +82,7 @@ export default function Table({ columns, rows, selected, onSelect, rowLink, empt
                   </td>
                 )}
                 {columns.map(c => (
-                  <td key={c.key} className="p-2">
+                  <td key={c.key}>
                     {c.render ? c.render(r[c.key], r) : r[c.key]}
                   </td>
                 ))}

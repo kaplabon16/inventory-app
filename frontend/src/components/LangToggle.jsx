@@ -10,7 +10,7 @@ export default function LangToggle() {
   return (
     <button
       onClick={switchLanguage}
-      className="inline-flex items-center justify-center h-10 min-w-[3rem] px-3 text-sm font-semibold rounded-lg shadow-sm bg-rose-500 text-white transition-colors hover:bg-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-rose-400 dark:bg-rose-400 dark:text-black dark:hover:bg-rose-300"
+      className="btn-plain inline-flex items-center justify-center h-10 min-w-[3rem] px-3 text-sm font-semibold rounded-lg shadow-sm bg-rose-500 text-white transition-colors hover:bg-rose-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-rose-400 dark:bg-rose-400 dark:text-black dark:hover:bg-rose-300"
       aria-label="Toggle language"
       title={i18n.language.toUpperCase()}
     >

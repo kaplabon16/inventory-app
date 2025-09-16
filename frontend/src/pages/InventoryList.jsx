@@ -45,33 +45,33 @@ export default function InventoryList() {
     <div className="max-w-6xl p-6 mx-auto">
       <div className="flex items-center justify-between mb-3">
         <h2 className="font-medium">All Inventories</h2>
-        <button onClick={create} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800" disabled={loading}>
+        <button onClick={create} className="btn btn-primary disabled:opacity-60 disabled:cursor-not-allowed" disabled={loading}>
           {loading ? 'Creating…' : 'Create inventory'}
         </button>
       </div>
 
       {error && <div className="mb-3 text-sm text-red-600">{error}</div>}
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-100 dark:bg-gray-800">
+      <div className="table-shell overflow-x-auto">
+        <table>
+          <thead>
             <tr>
-              <th className="p-2 text-left">Title</th>
-              <th className="p-2 text-left">Category</th>
-              <th className="p-2 text-left">Owner</th>
-              <th className="p-2 text-left">Items</th>
+              <th className="text-left">Title</th>
+              <th className="text-left">Category</th>
+              <th className="text-left">Owner</th>
+              <th className="text-left">Items</th>
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
-              <tr><td colSpan="4" className="p-6 text-center text-gray-500">No data</td></tr>
+              <tr><td colSpan="4" className="p-6 text-center text-slate-500 dark:text-slate-400">No data</td></tr>
             ) : (
               rows.reverse().map(r => (
-                <tr key={r.id} className="border-b cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-900" onClick={() => nav(`/inventories/${r.id}`)}>
-                  <td className="p-2">{r.title}</td>
-                  <td className="p-2">{r.categoryName ?? r.category?.name ?? '-'}</td>
-                  <td className="p-2">{r.ownerName ?? r.owner?.name ?? '-'}</td>
-                  <td className="p-2">{r.itemsCount ?? r.items?.length ?? 0}</td>
+                <tr key={r.id} className="cursor-pointer" onClick={() => nav(`/inventories/${r.id}`)}>
+                  <td>{r.title}</td>
+                  <td>{r.categoryName ?? r.category?.name ?? '-'}</td>
+                  <td>{r.ownerName ?? r.owner?.name ?? '-'}</td>
+                  <td>{r.itemsCount ?? r.items?.length ?? 0}</td>
                 </tr>
               ))
             )}
@@ -81,4 +81,3 @@ export default function InventoryList() {
     </div>
   )
 }
-

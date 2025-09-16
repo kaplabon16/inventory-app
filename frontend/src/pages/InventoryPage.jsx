@@ -50,6 +50,13 @@ export default function InventoryPage() {
 
   const [dragIndex, setDragIndex] = useState(-1)
 
+  const primaryBtn = "btn btn-primary"
+  const outlineBtn = "btn btn-outline"
+  const ghostBtn = "btn btn-ghost"
+  const accentBtn = "btn btn-accent"
+  const dangerBtn = "btn btn-danger"
+  const mutedBtn = "btn btn-muted"
+
   const toast = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 2000) }
 
   const load = async () => {
@@ -323,7 +330,7 @@ export default function InventoryPage() {
           ) : (categories.find(c => c.id === inv.categoryId)?.name || '-')}
         </span>
         {canEdit && (
-          <button onClick={saveSettings} className="px-3 py-1 text-sm border rounded">Save</button>
+          <button onClick={saveSettings} className={primaryBtn}>Save</button>
         )}
       </div>
 
@@ -355,7 +362,7 @@ export default function InventoryPage() {
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`px-3 py-1 border rounded text-sm ${tab === k ? 'bg-gray-100 dark:bg-gray-800' : ''}`}
+              className={`${ghostBtn} capitalize ${tab === k ? 'bg-indigo-100 text-indigo-700 dark:bg-[#171717] dark:text-indigo-200' : ''}`}
             >
               {k}
             </button>
@@ -369,8 +376,8 @@ export default function InventoryPage() {
             left={<div className="text-sm text-gray-500">Inventory items</div>}
             right={
               <>
-                {canWrite && <button onClick={addItem} className="px-2 py-1 text-sm border rounded">Add item</button>}
-                {canWrite && <button onClick={removeSelected} className="px-2 py-1 text-sm border rounded">Delete</button>}
+                {canWrite && <button onClick={addItem} className={`${accentBtn} h-9 px-4`}>Add item</button>}
+                {canWrite && <button onClick={removeSelected} className={`${dangerBtn} h-9 px-4`}>Delete</button>}
               </>
             }
           />

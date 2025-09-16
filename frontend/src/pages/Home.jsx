@@ -54,7 +54,7 @@ export default function Home() {
         <button
           onClick={createNow}
           disabled={creating}
-          className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+          className="btn btn-primary disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {creating ? "Creating…" : "Create inventory"}
         </button>
