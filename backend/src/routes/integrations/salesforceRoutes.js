@@ -1,4 +1,4 @@
-// backend/src/routes/integrations/salesforceRoutes.js
+
 import { Router } from 'express'
 import crypto from 'crypto'
 import fetch from 'node-fetch'
@@ -16,7 +16,7 @@ const REDIRECT_URI = process.env.SF_REDIRECT_URI
       ? `${process.env.BACKEND_URL.replace(/\/$/, '')}/api/integrations/salesforce/oauth/callback`
       : 'https://inventoryapp-app.up.railway.app/api/integrations/salesforce/oauth/callback')
 
-// PKCE helpers
+
 const flowStore = new Map()
 const FLOW_TTL_MS = 5 * 60 * 1000
 const base64url = (buf) => Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -34,7 +34,7 @@ function getAndRemoveFlow(state) {
 }
 setInterval(() => { const now = Date.now(); for (const [k, v] of flowStore) if (v.expiresAt < now) flowStore.delete(k) }, 60_000)
 
-// Start OAuth (PKCE)
+
 router.get('/oauth/start', requireAuth, (req, res) => {
   if (!CLIENT_ID) return res.status(500).json({ error: 'SF_CLIENT_ID not configured' })
   const { verifier, challenge } = genVerifierAndChallenge()
@@ -53,7 +53,7 @@ router.get('/oauth/start', requireAuth, (req, res) => {
   res.redirect(`${SF_LOGIN_URL}/services/oauth2/authorize?${params.toString()}`)
 })
 
-// OAuth callback
+
 router.get('/oauth/callback', async (req, res) => {
   try {
     const code = String(req.query.code || '')
@@ -85,7 +85,7 @@ router.get('/oauth/callback', async (req, res) => {
     }
 
     const json = await tokenRes.json()
-    // Persist per-user
+
     saveTokenForUser(flow.userId, {
       access_token: json.access_token,
       refresh_token: json.refresh_token || null,   // may be null if app policy disallows
@@ -109,7 +109,7 @@ router.get('/oauth/callback', async (req, res) => {
   }
 })
 
-// Create your own Account/Contact using per-user tokens
+
 router.post('/sync-self', requireAuth, async (req, res) => {
   try {
     const me = req.user

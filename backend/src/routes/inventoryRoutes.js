@@ -502,7 +502,6 @@ router.delete('/:id/access/:userId', requireAuth, async (req, res) => {
   res.json({ ok: true })
 })
 
-// ===== API token generation for external/public aggregate =====
 function b64url(bytes) {
   return bytes.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/,'')
 }
@@ -512,7 +511,7 @@ router.post('/:id/api-token', requireAuth, async (req, res) => {
   if (!inv) return res.status(404).json({ error: 'Not found' })
   if (!isOwnerOrAdmin(req.user, inv)) return res.status(403).json({ error: 'Forbidden' })
 
-  // rotate: one active token per inventory
+ 
   await prisma.inventoryApiToken.deleteMany({ where: { inventoryId: inv.id } })
   const token = b64url(crypto.randomBytes(24))
   const row = await prisma.inventoryApiToken.create({ data: { inventoryId: inv.id, token } })

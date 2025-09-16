@@ -394,7 +394,7 @@ export default function InventoryPage() {
       )}
     </label>
 
-    {/* API Token for Odoo import */}
+
     <div className="p-3 border rounded">
       <div className="mb-2 font-medium">External API Access Token (for Odoo import)</div>
       <div className="mb-2 text-sm text-gray-600">

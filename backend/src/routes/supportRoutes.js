@@ -1,4 +1,4 @@
-// backend/src/routes/supportRoutes.js
+
 import { Router } from 'express'
 import crypto from 'crypto'
 import { requireAuth } from '../middleware/auth.js'
@@ -7,9 +7,9 @@ import { prisma } from '../services/prisma.js'
 
 const router = Router()
 
-// POST /api/support/ticket
-// Body: { summary, priority, inventoryId?, link? }
-// Response: { ok: true, uploaded: { provider, path, url }, ticket: payload }
+
+
+
 router.post('/ticket', requireAuth, async (req, res) => {
   try {
     let { summary = '', priority = 'Average', inventoryId = '', link = '' } = req.body || {}

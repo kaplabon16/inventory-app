@@ -1,14 +1,10 @@
-// backend/src/routes/publicApiRoutes.js
+
 import { Router } from 'express'
 import { prisma } from '../services/prisma.js'
 
 const router = Router()
 
-/**
- * GET /api/public/inventory-aggregate?token=...
- * Supports token via query or Authorization: Bearer <token>
- * Returns aggregated stats for an inventory identified by a valid API token.
- */
+
 router.get('/public/inventory-aggregate', async (req, res) => {
   try {
     const bearer = (req.headers.authorization || '').replace(/^Bearer\s+/i, '').trim()
@@ -47,7 +43,7 @@ router.get('/public/inventory-aggregate', async (req, res) => {
       SELECT v, COUNT(*) as c FROM t GROUP BY v ORDER BY c DESC, v ASC LIMIT 5
     `
 
-    // Field definitions
+ 
     const fieldsRaw = await prisma.inventoryField.findMany({
       where: { inventoryId: id },
       orderBy: [{ displayOrder: 'asc' }],
@@ -79,7 +75,7 @@ router.get('/public/inventory-aggregate', async (req, res) => {
         num2: { min: num(nums?.num2_min), median: num(nums?.num2_med), avg: num(nums?.num2_avg), max: num(nums?.num2_max) },
         num3: { min: num(nums?.num3_min), median: num(nums?.num3_med), avg: num(nums?.num3_avg), max: num(nums?.num3_max) },
       },
-      // Odoo-addon friendly shape
+    
       inventory: { id, title: inv?.title || '', description: inv?.description || '' },
       aggregates: {
         numbers: {

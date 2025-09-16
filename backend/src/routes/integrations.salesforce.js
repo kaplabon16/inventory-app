@@ -11,7 +11,7 @@ const SF_CLIENT_SECRET = process.env.SF_CLIENT_SECRET || ''
 const SF_REDIRECT = process.env.SF_REDIRECT // must match Connected App
 const TOKENS_PATH = path.join(process.cwd(), 'backend', 'sf_tokens.json')
 
-// — helpers —
+
 const readTokens = () => {
   try { return JSON.parse(fs.readFileSync(TOKENS_PATH, 'utf8')) } catch { return null }
 }
@@ -20,7 +20,6 @@ const writeTokens = (t) => {
 }
 const form = (obj) => new URLSearchParams(obj)
 
-// build OAuth URL
 const authUrl = () => {
   const u = new URL(`${SF_LOGIN_URL}/services/oauth2/authorize`)
   u.searchParams.set('response_type', 'code')
@@ -30,10 +29,10 @@ const authUrl = () => {
   return u.toString()
 }
 
-// GET /api/integrations/salesforce/oauth/start
+
 router.get('/oauth/start', (_req, res) => res.redirect(authUrl()))
 
-// GET /api/integrations/salesforce/oauth/callback
+
 router.get('/oauth/callback', async (req, res) => {
   try {
     const code = req.query.code
@@ -53,9 +52,9 @@ router.get('/oauth/callback', async (req, res) => {
       const text = await r.text()
       return res.status(500).send(`Exchange failed: ${r.status} ${text}`)
     }
-    const tokens = await r.json() // { access_token, refresh_token, instance_url, ... }
+    const tokens = await r.json() 
 
-    // dev-only: write to file so you can test locally
+
     if (process.env.NODE_ENV !== 'production') writeTokens(tokens)
 
     res.send(`
@@ -68,14 +67,14 @@ router.get('/oauth/callback', async (req, res) => {
   }
 })
 
-// GET /api/integrations/salesforce/sync-self
+
 router.get('/sync-self', async (_req, res) => {
   try {
     const fileTokens = readTokens()
     const refresh_token = process.env.SF_REFRESH_TOKEN || fileTokens?.refresh_token
     if (!refresh_token) return res.status(400).json({ error: 'No refresh token configured. Connect Salesforce first.' })
 
-    // refresh access token
+
     const r = await fetch(`${SF_LOGIN_URL}/services/oauth2/token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -90,13 +89,13 @@ router.get('/sync-self', async (_req, res) => {
       const text = await r.text()
       return res.status(500).json({ error: `Refresh failed: ${r.status} ${text}` })
     }
-    const refreshed = await r.json() // { access_token, instance_url, ... }
+    const refreshed = await r.json() 
     if (process.env.NODE_ENV !== 'production') writeTokens({ ...(fileTokens||{}), ...refreshed })
 
     const instance = refreshed.instance_url || process.env.SF_INSTANCE_URL?.replace(/\/$/, '')
     if (!instance) return res.status(400).json({ error: 'Missing instance_url' })
 
-    // whoami
+
     const meResp = await fetch(`${instance}/services/oauth2/userinfo`, {
       headers: { Authorization: `Bearer ${refreshed.access_token}` }
     })

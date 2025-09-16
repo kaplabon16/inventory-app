@@ -66,7 +66,7 @@ async function ensureSharedLink(path) {
   })
 
   if (res.status === 409) {
-    // Already has one — list and reuse
+     
     const list = await fetch('https://api.dropboxapi.com/2/sharing/list_shared_links', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -96,19 +96,19 @@ export async function uploadSupportJson({ filenamePrefix = 'support_ticket', jso
   const datedPath = `${ROOT}/${y}/${m}/${name}`.replace(/\/+/g, '/')
   const flatPath = `${ROOT}/${name}`.replace(/\/+/g, '/')
 
-  // Do not mutate caller's object
+ 
   const safe = JSON.parse(JSON.stringify(json))
   const bytes = Buffer.from(JSON.stringify(safe, null, 2), 'utf8')
 
-  // Upload to flat folder for simple triggers
+  
   const metaFlat = await dropboxUploadBytes({ path: flatPath, bytes })
   let urlFlat = null
-  try { urlFlat = await ensureSharedLink(metaFlat.path_lower || metaFlat.path_display) } catch { /* optional */ }
+  try { urlFlat = await ensureSharedLink(metaFlat.path_lower || metaFlat.path_display) } catch {}
 
-  // Upload to dated folder for archival
+  
   const metaDated = await dropboxUploadBytes({ path: datedPath, bytes })
   let urlDated = null
-  try { urlDated = await ensureSharedLink(metaDated.path_lower || metaDated.path_display) } catch { /* optional */ }
+  try { urlDated = await ensureSharedLink(metaDated.path_lower || metaDated.path_display) } catch {}
 
   return {
     provider: 'dropbox',

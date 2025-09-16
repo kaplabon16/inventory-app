@@ -74,7 +74,7 @@ router.get('/google/callback', async (req, res, next) => {
       const rd = normalizeRedirect(
         typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
       )
-      // Also pass token via hash to handle browsers that block third-party cookies
+
       res.redirect(`${frontendBase}/oauth-catch#token=${tok}&rd=${encodeURIComponent(rd)}`)
     } catch (error) {
       console.error('Google OAuth callback error:', error)
@@ -117,7 +117,7 @@ router.get('/github/callback', async (req, res, next) => {
       const rd = normalizeRedirect(
         typeof req.query.state === 'string' ? decodeURIComponent(req.query.state) : ''
       )
-      // Also pass token via hash to handle browsers that block third-party cookies
+
       res.redirect(`${frontendBase}/oauth-catch#token=${tok}&rd=${encodeURIComponent(rd)}`)
     } catch (error) {
       console.error('GitHub OAuth callback error:', error)

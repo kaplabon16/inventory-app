@@ -1,8 +1,4 @@
-// tools/generate-support-json-example.js
-// Smoke test helper: uploads a sample support-ticket JSON to Dropbox using the
-// same uploader as the backend route. Requires env vars used by backend uploader.
 
-/* eslint-disable no-console */
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { createRequire } = require('node:module')

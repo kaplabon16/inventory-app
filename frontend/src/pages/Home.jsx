@@ -32,7 +32,7 @@ export default function Home() {
   }, [])
 
   const createNow = async () => {
-    // one click create (no extra page)
+
     if (!user) { nav("/login?redirect=/inventories"); return }
     setCreating(true); setErr("")
     try {

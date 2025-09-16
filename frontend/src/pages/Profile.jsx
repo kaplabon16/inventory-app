@@ -1,4 +1,4 @@
-// src/pages/Profile.jsx
+
 import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import api, { apiUrl } from "../api/client"
@@ -11,11 +11,11 @@ export default function Profile() {
   const { user, loadMe } = useAuth()
   const { t } = useTranslation()
 
-  // Inventories
+
   const [owned, setOwned] = useState([])
   const [write, setWrite] = useState([])
 
-  // Salesforce modal + form + status
+
   const [sfOpen, setSfOpen] = useState(false)
   const [hasSF, setHasSF] = useState(false)
   const [company, setCompany] = useState(user?.name || "")
@@ -24,7 +24,7 @@ export default function Profile() {
   const [msg, setMsg] = useState("")
   const [err, setErr] = useState("")
 
-  // Prefill + detect if already integrated (supports a few common shapes)
+
   useEffect(() => {
     setCompany(user?.name || "")
     const already =
@@ -35,7 +35,7 @@ export default function Profile() {
     setHasSF(already)
   }, [user])
 
-  // Load profile/inventories
+
   const load = async () => {
     try {
       const [a, b] = await Promise.all([
@@ -53,7 +53,7 @@ export default function Profile() {
   useEffect(() => {
     loadMe()
     load()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, [])
 
   const cols = [
@@ -81,13 +81,13 @@ export default function Profile() {
 
   return (
     <div className="max-w-6xl p-4 mx-auto space-y-6">
-      {/* Header */}
+
       <div>
         <h1 className="mb-1 text-xl font-semibold">{user?.name}</h1>
         <div className="text-sm text-gray-600 dark:text-gray-300">{user?.email}</div>
       </div>
 
-      {/* Inventories */}
+
       <div className="grid gap-6 md:grid-cols-2">
         <div>
           <Toolbar left={<div className="text-sm text-gray-500">{t("inventories")} (owner)</div>} />
@@ -99,7 +99,7 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Salesforce trigger button (hidden once integrated) */}
+
       {!hasSF && (
         <div className="flex justify-end">
           <button

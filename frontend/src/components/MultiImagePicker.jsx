@@ -59,7 +59,7 @@ export default function MultiImagePicker({
     const next = [...value]; next.splice(i,1); onChange?.(next)
   }
 
-  // minimal drag-reorder (mouse/touch)
+
   const [dragIdx, setDragIdx] = useState(null)
   const onDragStart = (i) => () => setDragIdx(i)
   const onDragOver = (i) => (e) => {
