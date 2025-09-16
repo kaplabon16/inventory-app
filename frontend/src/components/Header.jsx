@@ -6,82 +6,6 @@ import LangToggle from "./LangToggle"
 import { useTranslation } from "react-i18next"
 import SupportTicketModal from "./SupportTicketModal"
 
-const iconProps = {
-  className: "w-5 h-5",
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.5,
-  strokeLinecap: "round",
-  strokeLinejoin: "round",
-}
-
-const InventoryIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="M3 3h8v8H3V3Zm10 0h8v8h-8V3ZM3 13h8v8H3v-8Zm10 0h8v8h-8v-8Z" />
-  </svg>
-)
-
-const HelpIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="M12 21a9 9 0 1 1 0-18 9 9 0 0 1 0 18Z" />
-    <path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.24V13" />
-    <circle cx="12" cy="16.5" r=".75" fill="currentColor" stroke="none" />
-  </svg>
-)
-
-const UserIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />
-    <path d="M4 19a8 8 0 0 1 16 0" />
-  </svg>
-)
-
-const AdminIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="m12 3 1.2 2.4 2.7.4-2 1.9.5 2.7-2.4-1.2-2.4 1.2.5-2.7-2-1.9 2.7-.4L12 3Z" />
-    <path d="m6 13 1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2L2.8 15 5 14.9 6 13Zm12 0 1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3 1-2Z" />
-  </svg>
-)
-
-const LogoutIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="M15.75 7.5v-1A2.5 2.5 0 0 0 13.25 4h-6.5A2.5 2.5 0 0 0 4.25 6.5v11A2.5 2.5 0 0 0 6.75 20h6.5a2.5 2.5 0 0 0 2.5-2.5v-1" />
-    <path d="M19.5 12h-9" />
-    <path d="m16.5 9 3 3-3 3" />
-  </svg>
-)
-
-const LoginIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="M8.25 7.5v-1A2.5 2.5 0 0 1 10.75 4h6.5A2.5 2.5 0 0 1 19.75 6.5v11A2.5 2.5 0 0 1 17.25 20h-6.5a2.5 2.5 0 0 1-2.5-2.5v-1" />
-    <path d="M4.5 12h9" />
-    <path d="m7.5 9-3 3 3 3" />
-  </svg>
-)
-
-const RegisterIcon = () => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    <path d="M15 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z" />
-    <path d="M4 19a8 8 0 0 1 12-7" />
-    <path d="M20 10v6" />
-    <path d="M23 13h-6" />
-  </svg>
-)
-
-const MenuIcon = ({ open }) => (
-  <svg viewBox="0 0 24 24" {...iconProps}>
-    {open ? (
-      <path d="m6 6 12 12M6 18 18 6" />
-    ) : (
-      <>
-        <path d="M4 7h16" />
-        <path d="M4 12h16" />
-        <path d="M4 17h16" />
-      </>
-    )}
-  </svg>
-)
-
 export default function Header() {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
@@ -119,14 +43,13 @@ export default function Header() {
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
-  const headerButton = "icon-btn"
-  const accentButton = "icon-btn icon-btn--accent"
-  const dangerButton = "icon-btn icon-btn--danger"
+  const headerButton = "btn btn-primary h-9 px-3 gap-2 text-xs uppercase tracking-wide"
+  const outlineButton = headerButton
 
   const SearchForm = ({ className }) => (
     <form onSubmit={onSubmit} className={className}>
       <label className="sr-only" htmlFor="global-search">{t("search")}</label>
-      <div className="flex items-center gap-2">
+      <div className="flex">
         <input
           ref={inputRef}
           id="global-search"
@@ -135,18 +58,16 @@ export default function Header() {
           placeholder={`${t("search")} (Ctrl/Cmd+K)`}
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          className="w-full rounded-full border border-indigo-200 bg-white px-4 py-2 text-sm text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400 dark:border-[#1f1f1f] dark:bg-[#0c0c0c] dark:text-gray-100"
+          className="w-full rounded-l-lg border border-indigo-200 bg-white px-3 text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400 dark:border-[#1f1f1f] dark:bg-[#0c0c0c] dark:text-gray-100"
         />
         <button
           type="submit"
-          className={headerButton}
+          className={`${headerButton} rounded-l-none rounded-r-lg`}
           aria-label={t("search")}
           title={t("search")}
         >
-          <svg viewBox="0 0 24 24" {...iconProps}>
-            <circle cx="11" cy="11" r="6" />
-            <path d="m16.5 16.5 3 3" />
-          </svg>
+          <span aria-hidden="true" className="text-sm">🔍</span>
+          <span className="sr-only">{t("search")}</span>
         </button>
       </div>
     </form>
