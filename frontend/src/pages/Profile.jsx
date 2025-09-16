@@ -61,6 +61,9 @@ export default function Profile() {
     { key: "itemsCount", title: t("items") },
   ]
 
+  const actionButton = "inline-flex items-center justify-center h-10 px-4 text-sm font-semibold rounded-lg shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:ring-indigo-400 dark:bg-indigo-400 dark:text-black dark:hover:bg-indigo-300"
+  const outlineButton = "inline-flex items-center justify-center h-10 px-4 text-sm font-semibold rounded-lg shadow-sm border border-indigo-500 text-indigo-600 transition-colors hover:bg-indigo-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-300 dark:border-indigo-400 dark:text-indigo-200 dark:hover:bg-indigo-500/10"
+
   const syncSF = async () => {
     setMsg(""); setErr("")
     try {
@@ -81,9 +84,25 @@ export default function Profile() {
   return (
     <div className="max-w-6xl p-4 mx-auto space-y-6">
 
-      <div>
-        <h1 className="mb-1 text-xl font-semibold">{user?.name}</h1>
-        <div className="text-sm text-gray-600 dark:text-gray-300">{user?.email}</div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="mb-1 text-xl font-semibold">{user?.name}</h1>
+          <div className="text-sm text-gray-600 dark:text-gray-300">{user?.email}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          {!hasSF ? (
+            <button
+              className={actionButton}
+              onClick={() => { setErr(""); setMsg(""); setSfOpen(true) }}
+            >
+              Connect Salesforce
+            </button>
+          ) : (
+            <span className="inline-flex items-center justify-center h-10 px-4 text-sm font-semibold rounded-lg border border-emerald-500 text-emerald-500 dark:border-emerald-400 dark:text-emerald-300">
+              Salesforce connected
+            </span>
+          )}
+        </div>
       </div>
 
 
@@ -98,18 +117,6 @@ export default function Profile() {
         </div>
       </div>
 
-
-      {!hasSF && (
-        <div className="flex justify-end">
-          <button
-            className="px-3 py-1 text-sm border rounded hover:bg-gray-50 dark:hover:bg-gray-800"
-            onClick={() => { setErr(""); setMsg(""); setSfOpen(true) }}
-          >
-            Connect Salesforce
-          </button>
-        </div>
-      )}
-
       {/* Modal */}
       {sfOpen && (
         <div
@@ -118,10 +125,10 @@ export default function Profile() {
           role="dialog"
         >
           <div className="absolute inset-0 bg-black/40" onClick={() => setSfOpen(false)} />
-          <div className="relative z-10 w-full max-w-lg p-4 bg-white rounded shadow-lg dark:bg-gray-900">
+          <div className="relative z-10 w-full max-w-lg p-6 bg-white rounded-xl shadow-2xl border border-indigo-100 dark:bg-[#0c0c0c] dark:border-[#1f1f1f] dark-surface">
             <div className="flex items-center justify-between mb-2">
               <button
-                className="px-2 py-1 text-sm border rounded"
+                className={`${outlineButton} w-10 px-0`}
                 onClick={() => setSfOpen(false)}
                 aria-label="Close"
               >
@@ -164,11 +171,11 @@ export default function Profile() {
             </div>
 
             <div className="flex justify-end gap-2 mt-3">
-              <button className="px-3 py-1 text-sm border rounded" onClick={() => setSfOpen(false)}>
+              <button className={outlineButton} onClick={() => setSfOpen(false)}>
                 Close
               </button>
               <button
-                className="px-3 py-1 text-sm text-white bg-blue-600 border rounded hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                className={`${actionButton} disabled:opacity-60 disabled:cursor-not-allowed`}
                 onClick={syncSF}
                 disabled={hasSF}
               >

@@ -5,7 +5,7 @@ import LanguageDetector from "i18next-browser-languagedetector"
 const resources = {
   en: {
     translation: {
-      app: "Inventory",
+      app: "Inventory Management System",
       search: "Search",
       login: "Login",
       logout: "Logout",
@@ -76,7 +76,7 @@ const resources = {
   },
   bn: {
     translation: {
-      app: "ইনভেন্টরি",
+      app: "ইনভেন্টরি ম্যানেজমেন্ট সিস্টেম",
       search: "খোঁজ",
       login: "লগইন",
       logout: "লগআউট",

@@ -43,6 +43,11 @@ export default function Header() {
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
+  const baseButton = "inline-flex items-center justify-center h-10 min-w-[3rem] px-4 text-sm font-semibold rounded-lg shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+  const primaryButton = `${baseButton} bg-indigo-500 text-white hover:bg-indigo-400 focus-visible:ring-indigo-400 dark:bg-indigo-400 dark:text-black dark:hover:bg-indigo-300`
+  const accentButton = `${baseButton} bg-emerald-500 text-white hover:bg-emerald-400 focus-visible:ring-emerald-300 dark:bg-emerald-400 dark:text-black dark:hover:bg-emerald-300`
+  const outlineButton = `${baseButton} border border-indigo-500 text-indigo-600 hover:bg-indigo-50 focus-visible:ring-indigo-300 dark:border-indigo-400 dark:text-indigo-200 dark:hover:bg-indigo-500/10`
+
   const SearchForm = ({ className }) => (
     <form onSubmit={onSubmit} className={className}>
       <label className="sr-only" htmlFor="global-search">{t("search")}</label>
@@ -55,20 +60,27 @@ export default function Header() {
           placeholder={`${t("search")} (Ctrl/Cmd+K)`}
           value={term}
           onChange={(e) => setTerm(e.target.value)}
-          className="w-full rounded-l-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full rounded-l-lg border border-indigo-200 bg-white px-3 text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400 dark:border-[#1f1f1f] dark:bg-[#0c0c0c] dark:text-gray-100"
         />
-        <button type="submit" className="rounded-r-md border border-l-0 border-gray-300 dark:border-gray-700 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-gray-800" aria-label={t("search")} title={t("search")}>🔎</button>
+        <button
+          type="submit"
+          className="flex items-center justify-center h-10 min-w-[3rem] rounded-r-lg bg-indigo-500 px-3 text-white transition-colors hover:bg-indigo-400 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 dark:bg-indigo-400 dark:text-black dark:hover:bg-indigo-300"
+          aria-label={t("search")}
+          title={t("search")}
+        >
+          🔎
+        </button>
       </div>
     </form>
   )
 
   return (
-    <header className="sticky top-0 z-10 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
+    <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/85 backdrop-blur dark:border-[#1b1b1b] dark:bg-black/90">
       <div className="flex items-center max-w-6xl gap-3 px-4 py-3 mx-auto">
-        <Link to="/" className="text-xl font-semibold tracking-tight">{t("app")}</Link>
+        <Link to="/" className="text-xl font-semibold tracking-tight text-indigo-700 dark:text-indigo-300">{t("app")}</Link>
 
         <nav className="items-center hidden gap-3 ml-2 text-sm lg:flex">
-          <Link to="/inventories" className="px-2 py-1 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+          <Link to="/inventories" className={outlineButton}>
             {t("inventories")}
           </Link>
         </nav>
@@ -77,17 +89,17 @@ export default function Header() {
 
         <button
           onClick={() => setMenuOpen((v) => !v)}
-          className="px-3 py-1.5 ml-auto border rounded lg:hidden hover:bg-gray-100 dark:hover:bg-gray-800"
+          className={`${outlineButton} ml-auto lg:hidden`}
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
         >
-          {menuOpen ? t("🅧") : t("⏬️")}
+          {menuOpen ? "Close" : "Menu"}
         </button>
 
         <div className="items-center hidden gap-2 ml-auto lg:flex">
           <button
             onClick={() => setOpenTicket(true)}
-            className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+            className={accentButton}
             title="Create support ticket"
           >
             Help
@@ -95,24 +107,24 @@ export default function Header() {
 
           {!user ? (
             <>
-              <Link to="/login" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <Link to="/login" className={primaryButton}>
                 {t("login")}
               </Link>
-              <Link to="/register" className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <Link to="/register" className={outlineButton}>
                 {t("register")}
               </Link>
             </>
           ) : (
             <>
-              <button onClick={()=>navigate("/profile")} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={()=>navigate("/profile")} className={primaryButton}>
                 {t("profile")}
               </button>
               {isAdmin && (
-                <button onClick={()=>navigate('/admin')} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+                <button onClick={()=>navigate('/admin')} className={outlineButton}>
                   {t("admin")}
                 </button>
               )}
-              <button onClick={logout} className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800">
+              <button onClick={logout} className={accentButton}>
                 {t("logout")}
               </button>
             </>
@@ -123,11 +135,11 @@ export default function Header() {
       </div>
 
       {menuOpen && (
-        <div id="mobile-menu" className="px-4 pb-4 border-t border-gray-200 dark:border-gray-800 lg:hidden">
+        <div id="mobile-menu" className="px-4 pb-4 border-t border-gray-200 dark:border-[#1b1b1b] lg:hidden bg-white/95 dark:bg-black">
           <nav className="flex flex-col gap-2 pt-3 text-sm">
             <Link
               to="/inventories"
-              className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              className={outlineButton}
               onClick={() => setMenuOpen(false)}
             >
               {t("inventories")}
@@ -142,7 +154,7 @@ export default function Header() {
                 setMenuOpen(false)
                 setOpenTicket(true)
               }}
-              className="px-3 py-1.5 border rounded text-left hover:bg-gray-100 dark:hover:bg-gray-800"
+              className={`${accentButton} justify-start`}
             >
               Help
             </button>
@@ -152,14 +164,14 @@ export default function Header() {
                 <Link
                   to="/login"
                   onClick={() => setMenuOpen(false)}
-                  className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className={primaryButton}
                 >
                   {t("login")}
                 </Link>
                 <Link
                   to="/register"
                   onClick={() => setMenuOpen(false)}
-                  className="px-3 py-1.5 border rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className={outlineButton}
                 >
                   {t("register")}
                 </Link>
@@ -171,7 +183,7 @@ export default function Header() {
                     setMenuOpen(false)
                     navigate("/profile")
                   }}
-                  className="px-3 py-1.5 border rounded text-left hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className={`${primaryButton} justify-start`}
                 >
                   {t("profile")}
                 </button>
@@ -181,7 +193,7 @@ export default function Header() {
                       setMenuOpen(false)
                       navigate('/admin')
                     }}
-                    className="px-3 py-1.5 border rounded text-left hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className={`${outlineButton} justify-start`}
                   >
                     {t("admin")}
                   </button>
@@ -191,7 +203,7 @@ export default function Header() {
                     setMenuOpen(false)
                     logout()
                   }}
-                  className="px-3 py-1.5 border rounded text-left hover:bg-gray-100 dark:hover:bg-gray-800"
+                  className={`${accentButton} justify-start`}
                 >
                   {t("logout")}
                 </button>

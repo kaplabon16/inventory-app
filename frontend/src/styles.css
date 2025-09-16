@@ -7,8 +7,37 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 
-:root { --bg-amoled: #000000; }
-html.dark body { background: var(--bg-amoled); }
+:root {
+  --bg-amoled: #000000;
+  --surface-dark: #080808;
+  --surface-dark-elevated: #101010;
+  --border-dark: #1a1a1a;
+  --text-dark: #f4f4f5;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+html.dark body {
+  background: var(--bg-amoled);
+  color: var(--text-dark);
+}
+
+.dark-surface {
+  background: white;
+}
+
+html.dark .dark-surface {
+  background: var(--surface-dark-elevated);
+  border-color: var(--border-dark);
+}
+
+html.dark .dark\:bg-gray-900 { background-color: var(--surface-dark) !important; }
+html.dark .dark\:bg-gray-800 { background-color: #141414 !important; }
+html.dark .dark\:hover\:bg-gray-800:hover { background-color: #141414 !important; }
+html.dark .dark\:border-gray-800 { border-color: var(--border-dark) !important; }
+html.dark .dark\:border-gray-700 { border-color: var(--border-dark) !important; }
 
 
 button, .btn, a.button {

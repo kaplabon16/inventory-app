@@ -4,6 +4,7 @@ import "./i18n"
 import { useEffect } from 'react'
 import { useAuth } from './store/auth'
 import Header from "./components/Header"
+import Footer from "./components/Footer"
 import Home from "./pages/Home"
 import Login from "./pages/Login"
 import Register from "./pages/Register"
@@ -23,7 +24,7 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <div className="flex flex-col min-h-screen text-gray-900 transition-colors duration-300 bg-white dark:bg-gray-900 dark:text-gray-100">
+      <div className="flex flex-col min-h-screen text-gray-900 transition-colors duration-300 bg-slate-50 dark:bg-black dark:text-gray-100">
         <Header />
         <main className="flex-1 p-4">
           <Routes>
@@ -47,6 +48,7 @@ export default function App() {
             <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           </Routes>
         </main>
+        <Footer />
       </div>
     </BrowserRouter>
   )
