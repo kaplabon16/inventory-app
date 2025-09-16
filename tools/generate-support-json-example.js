@@ -5,6 +5,29 @@
 /* eslint-disable no-console */
 const path = require('node:path')
 const { pathToFileURL } = require('node:url')
+const { createRequire } = require('node:module')
+
+function loadBackendEnv() {
+  const backendRoot = path.resolve(__dirname, '../backend')
+  const envFile = process.env.BACKEND_ENV_FILE || path.join(backendRoot, '.env')
+
+  try {
+    const backendRequire = createRequire(path.join(backendRoot, 'package.json'))
+    const { config } = backendRequire('dotenv')
+    const result = config({ path: envFile })
+    if (result?.error) throw result.error
+  } catch (err) {
+    if (err?.code === 'MODULE_NOT_FOUND') {
+      console.warn('[test] Warning: backend dotenv dependency not found; continuing without automatic env load')
+    } else if (err?.code === 'ENOENT') {
+      console.warn(`[test] Warning: backend env file not found at ${envFile}; continuing with existing env`)
+    } else {
+      console.warn(`[test] Warning: failed to load backend env: ${err?.message || err}`)
+    }
+  }
+}
+
+loadBackendEnv()
 
 async function main() {
   try {
@@ -32,4 +55,3 @@ async function main() {
 }
 
 main()
-
