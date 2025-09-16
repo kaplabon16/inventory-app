@@ -30,7 +30,7 @@ export default function SupportTicketModal({ open, onClose, inventoryId }) {
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40">
       <div className="w-full max-w-lg p-4 bg-white rounded shadow dark:bg-gray-900">
         <div className="flex items-center justify-between mb-3">
-          <button className="px-2 py-1 text-sm border rounded" onClick={onClose}>❌</button>
+          <button className="px-2 py-1 text-sm border rounded" onClick={onClose}>🅧</button>
           <div className="text-lg font-semibold">Create support ticket</div>
         </div>
 

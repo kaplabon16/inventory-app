@@ -81,7 +81,7 @@ export default function Header() {
           aria-expanded={menuOpen}
           aria-controls="mobile-menu"
         >
-          {menuOpen ? t("❌") : t("⏬️")}
+          {menuOpen ? t("🅧") : t("⏬️")}
         </button>
 
         <div className="items-center hidden gap-2 ml-auto lg:flex">
