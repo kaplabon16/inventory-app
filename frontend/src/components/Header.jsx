@@ -6,6 +6,44 @@ import LangToggle from "./LangToggle"
 import { useTranslation } from "react-i18next"
 import SupportTicketModal from "./SupportTicketModal"
 
+function HeaderSearchForm({
+  className,
+  onSubmit,
+  inputRef,
+  term,
+  onTermChange,
+  placeholder,
+  buttonClassName,
+  label,
+  inputId = "global-search"
+}) {
+  return (
+    <form onSubmit={onSubmit} className={className}>
+      <label className="sr-only" htmlFor={inputId}>{label}</label>
+      <div className="flex">
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="search"
+          inputMode="search"
+          placeholder={placeholder}
+          value={term}
+          onChange={onTermChange}
+          className="w-full rounded-l-lg border border-indigo-200 bg-white px-3 text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400 dark:border-[#1f1f1f] dark:bg-[#0c0c0c] dark:text-gray-100"
+        />
+        <button
+          type="submit"
+          className={buttonClassName}
+          aria-label={label}
+          title={label}
+        >
+          🔎
+        </button>
+      </div>
+    </form>
+  )
+}
+
 export default function Header() {
   const { t } = useTranslation()
   const { user, logout } = useAuth()
@@ -45,31 +83,9 @@ export default function Header() {
 
   const headerButton = "inline-flex items-center justify-center h-10 min-w-[3rem] px-5 text-sm font-semibold rounded-full shadow-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30"
 
-  const SearchForm = ({ className }) => (
-    <form onSubmit={onSubmit} className={className}>
-      <label className="sr-only" htmlFor="global-search">{t("search")}</label>
-      <div className="flex">
-        <input
-          ref={inputRef}
-          id="global-search"
-          type="search"
-          inputMode="search"
-          placeholder={`${t("search")} (Ctrl/Cmd+K)`}
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-          className="w-full rounded-l-lg border border-indigo-200 bg-white px-3 text-gray-900 outline-none focus:ring-2 focus:ring-indigo-400 dark:border-[#1f1f1f] dark:bg-[#0c0c0c] dark:text-gray-100"
-        />
-        <button
-          type="submit"
-          className={headerButton}
-          aria-label={t("search")}
-          title={t("search")}
-        >
-          🔎
-        </button>
-      </div>
-    </form>
-  )
+  const handleTermChange = (e) => setTerm(e.target.value)
+  const searchLabel = t("search")
+  const placeholder = `${searchLabel} (Ctrl/Cmd+K)`
 
   return (
     <header className="sticky top-0 z-10 border-b border-gray-200 bg-white/85 backdrop-blur dark:border-[#1b1b1b] dark:bg-black/90">
@@ -82,7 +98,16 @@ export default function Header() {
           </Link>
         </nav>
 
-        <SearchForm className="flex-1 hidden max-w-xl ml-3 lg:block" />
+        <HeaderSearchForm
+          className="flex-1 hidden max-w-xl ml-3 lg:block"
+          onSubmit={onSubmit}
+          inputRef={inputRef}
+          term={term}
+          onTermChange={handleTermChange}
+          placeholder={placeholder}
+          buttonClassName={headerButton}
+          label={searchLabel}
+        />
 
         <button
           onClick={() => setMenuOpen((v) => !v)}
@@ -143,7 +168,17 @@ export default function Header() {
             </Link>
           </nav>
 
-          <SearchForm className="mt-3" />
+          <HeaderSearchForm
+            className="mt-3"
+            onSubmit={onSubmit}
+            inputRef={inputRef}
+            term={term}
+            onTermChange={handleTermChange}
+            placeholder={placeholder}
+            buttonClassName={headerButton}
+            label={searchLabel}
+            inputId="global-search-mobile"
+          />
 
           <div className="flex flex-col gap-2 mt-3">
             <button

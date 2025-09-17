@@ -11,16 +11,109 @@ export default function Search() {
   const [rows, setRows] = useState([])
 
   useEffect(()=>{
-    (async()=>{
-      const { data } = await api.get('/api/search', { params: { q } })
-      setRows(data.items || [])
+    let ignore = false
+    if (!q) {
+      setRows([])
+      return () => { ignore = true }
+    }
+
+    const translateOrFallback = (key, idx, fallback) => {
+      const translated = t(key, { index: idx })
+      return translated === key ? fallback : translated
+    }
+
+    const yesText = (() => {
+      const value = t('yes')
+      return value === 'yes' ? 'Yes' : value
     })()
-  },[q])
+    const noText = (() => {
+      const value = t('no')
+      return value === 'no' ? 'No' : value
+    })()
+
+    const normalizeValue = (v) => {
+      if (typeof v === 'number') return Number.isFinite(v) ? v.toString() : ''
+      if (typeof v === 'boolean') return v ? yesText : noText
+      if (typeof v === 'string') return v.trim()
+      return ''
+    }
+
+    const formatSlot = (item, idx) => {
+      const candidates = [
+        { key: `text${idx}`, label: translateOrFallback('text_field', idx, `Text ${idx}`) },
+        { key: `mtext${idx}`, label: translateOrFallback('multiline_field', idx, `Long Text ${idx}`) },
+        { key: `num${idx}`, label: translateOrFallback('number_field', idx, `Number ${idx}`) },
+        { key: `bool${idx}`, label: translateOrFallback('bool_field', idx, `Boolean ${idx}`) },
+        { key: `link${idx}`, label: translateOrFallback('link_field', idx, `Link ${idx}`), isLink: true }
+      ]
+
+      for (const cand of candidates) {
+        const raw = item?.[cand.key]
+        if (raw === null || raw === undefined) continue
+        const value = normalizeValue(raw)
+        if (!value) continue
+        return { value, label: cand.label, isLink: !!cand.isLink }
+      }
+      return { value: '', label: '', isLink: false }
+    }
+
+    const renderableRows = (items) => items.map((item) => {
+      const slot1 = formatSlot(item, 1)
+      const slot2 = formatSlot(item, 2)
+      const slot3 = formatSlot(item, 3)
+      return {
+        ...item,
+        invTitle: item?.inventory?.title || '',
+        t1: slot1.value,
+        t2: slot2.value,
+        t3: slot3.value,
+        t1Label: slot1.label,
+        t2Label: slot2.label,
+        t3Label: slot3.label,
+        t1IsLink: slot1.isLink,
+        t2IsLink: slot2.isLink,
+        t3IsLink: slot3.isLink
+      }
+    })
+
+    ;(async()=>{
+      try {
+        const { data } = await api.get('/api/search', { params: { q } })
+        if (ignore) return
+        const items = Array.isArray(data.items) ? data.items : []
+        setRows(renderableRows(items))
+      } catch {
+        if (!ignore) setRows([])
+      }
+    })()
+
+    return () => { ignore = true }
+  },[q, t])
+
+  const renderFieldCell = (key) => (value, row) => {
+    if (!value) return ''
+    const label = row?.[`${key}Label`]
+    const isLink = row?.[`${key}IsLink`]
+    const content = isLink ? (
+      <a href={value} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
+        {value}
+      </a>
+    ) : value
+
+    return label ? (
+      <div>
+        <div className="text-xs text-slate-500 dark:text-slate-400">{label}</div>
+        <div>{content}</div>
+      </div>
+    ) : content
+  }
 
   const cols = [
     { key: 'customId', title: 'ID', render:(v,r)=><Link to={`/inventories/${r.inventoryId}/item/${r.id}`} className="text-blue-600">{v}</Link> },
     { key: 'invTitle', title: 'Inventory' },
-    { key: 't1', title: 'T1' }, { key: 't2', title: 'T2' }, { key: 't3', title: 'T3' }
+    { key: 't1', title: 'Field 1', render: renderFieldCell('t1') },
+    { key: 't2', title: 'Field 2', render: renderFieldCell('t2') },
+    { key: 't3', title: 'Field 3', render: renderFieldCell('t3') }
   ]
 
   return (
