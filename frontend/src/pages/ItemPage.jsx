@@ -85,15 +85,25 @@ export default function ItemPage() {
   if (!item || !fields) return <div className="p-6">Loading…</div>
 
   const inputFor = (f) => {
-    const base = (f.group || '').toString().toLowerCase()
-    const prefix =
-      base === 'number' ? 'num' :
-      base === 'text'   ? 'text' :
-      base === 'mtext'  ? 'mtext' :
-      base === 'link'   ? 'link' :
-      base === 'bool'   ? 'bool' : 'img'
-    const key = `${prefix}${f.slot}`
-    const label = (fields[prefix] && fields[prefix][f.slot - 1]?.title) || `${f.group} ${f.slot}`
+    const baseGroup = (f.group || '').toString().toLowerCase()
+    const resolvePrefixes = (group) => {
+      switch (group) {
+        case 'number': return { fieldKey: 'num', valuePrefix: 'num' }
+        case 'text':   return { fieldKey: 'text', valuePrefix: 'text' }
+        case 'mtext':  return { fieldKey: 'mtext', valuePrefix: 'mtext' }
+        case 'link':   return { fieldKey: 'link', valuePrefix: 'link' }
+        case 'bool':   return { fieldKey: 'bool', valuePrefix: 'bool' }
+        case 'image':  return { fieldKey: 'image', valuePrefix: 'img' }
+        default:       return { fieldKey: group, valuePrefix: group }
+      }
+    }
+
+    const { fieldKey, valuePrefix } = resolvePrefixes(baseGroup)
+    const valueKey = `${valuePrefix}${f.slot}`
+    const configuredTitle = fields?.[fieldKey]?.[f.slot - 1]?.title
+    const label = (configuredTitle && configuredTitle.trim())
+      ? configuredTitle.trim()
+      : (f.title?.trim() || `${f.group} ${f.slot}`)
 
     switch (f.group) {
       case 'TEXT':
@@ -101,8 +111,8 @@ export default function ItemPage() {
           <label className="grid gap-1">
             <span>{label}</span>
             <input
-              value={item[key] || ''}
-              onChange={(e) => setItem({ ...item, [key]: e.target.value })}
+              value={item[valueKey] || ''}
+              onChange={(e) => setItem({ ...item, [valueKey]: e.target.value })}
               className="px-2 py-1 border rounded"
               disabled={!canWrite}
             />
@@ -114,8 +124,8 @@ export default function ItemPage() {
             <span>{label}</span>
             <textarea
               rows={4}
-              value={item[key] || ''}
-              onChange={(e) => setItem({ ...item, [key]: e.target.value })}
+              value={item[valueKey] || ''}
+              onChange={(e) => setItem({ ...item, [valueKey]: e.target.value })}
               className="px-2 py-1 border rounded"
               disabled={!canWrite}
             />
@@ -127,10 +137,10 @@ export default function ItemPage() {
             <span>{label}</span>
             <input
               type="number"
-              value={item[key] ?? ''}
+              value={item[valueKey] ?? ''}
               onChange={(e) => {
                 const raw = e.target.value
-                setItem({ ...item, [key]: raw === '' ? '' : coerceNum(raw) })
+                setItem({ ...item, [valueKey]: raw === '' ? '' : coerceNum(raw) })
               }}
               className="px-2 py-1 border rounded"
               disabled={!canWrite}
@@ -143,8 +153,8 @@ export default function ItemPage() {
             <span>{label}</span>
             <input
               type="url"
-              value={item[key] || ''}
-              onChange={(e) => setItem({ ...item, [key]: e.target.value })}
+              value={item[valueKey] || ''}
+              onChange={(e) => setItem({ ...item, [valueKey]: e.target.value })}
               className="px-2 py-1 border rounded"
               disabled={!canWrite}
             />
@@ -155,25 +165,28 @@ export default function ItemPage() {
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              checked={!!item[key]}
-              onChange={(e) => setItem({ ...item, [key]: e.target.checked })}
+              checked={!!item[valueKey]}
+              onChange={(e) => setItem({ ...item, [valueKey]: e.target.checked })}
               disabled={!canWrite}
             />
             <span>{label}</span>
           </label>
         )
       case 'IMAGE':
-        return (
-          <div className="grid gap-1">
-            <UploadImage
-              label={label}
-              value={item[`img${f.slot}`] || ''}
-              onChange={(u) => setItem({ ...item, [`img${f.slot}`]: u })}
-              inventoryId={id}
-              canWrite={canWrite}
-            />
-          </div>
-        )
+        {
+          const imageKey = `img${f.slot}`
+          return (
+            <div className="grid gap-1">
+              <UploadImage
+                label={label}
+                value={item[imageKey] || ''}
+                onChange={(u) => setItem({ ...item, [imageKey]: u })}
+                inventoryId={id}
+                canWrite={canWrite}
+              />
+            </div>
+          )
+        }
       default:
         return null
     }

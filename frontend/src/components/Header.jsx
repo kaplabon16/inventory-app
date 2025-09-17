@@ -119,13 +119,15 @@ export default function Header() {
         </button>
 
         <div className="items-center hidden gap-2 ml-auto lg:flex">
-          <button
-            onClick={() => setOpenTicket(true)}
-            className={headerButton}
-            title="Create support ticket"
-          >
-            Help
-          </button>
+          {user && (
+            <button
+              onClick={() => setOpenTicket(true)}
+              className={headerButton}
+              title="Create support ticket"
+            >
+              Help
+            </button>
+          )}
 
           {!user ? (
             <>
@@ -181,15 +183,17 @@ export default function Header() {
           />
 
           <div className="flex flex-col gap-2 mt-3">
-            <button
-              onClick={() => {
-                setMenuOpen(false)
-                setOpenTicket(true)
-              }}
-              className={`${headerButton} justify-start`}
-            >
-              Help
-            </button>
+            {user && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false)
+                  setOpenTicket(true)
+                }}
+                className={headerButton}
+              >
+                Help
+              </button>
+            )}
 
             {!user ? (
               <>
@@ -215,7 +219,7 @@ export default function Header() {
                     setMenuOpen(false)
                     navigate("/profile")
                   }}
-                  className={`${headerButton} justify-start`}
+                  className={headerButton}
                 >
                   {t("profile")}
                 </button>
@@ -225,7 +229,7 @@ export default function Header() {
                       setMenuOpen(false)
                       navigate('/admin')
                     }}
-                    className={`${headerButton} justify-start`}
+                    className={headerButton}
                   >
                     {t("admin")}
                   </button>
@@ -235,7 +239,7 @@ export default function Header() {
                     setMenuOpen(false)
                     logout()
                   }}
-                  className={`${headerButton} justify-start`}
+                  className={headerButton}
                 >
                   {t("logout")}
                 </button>
