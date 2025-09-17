@@ -39,12 +39,14 @@ export default function Search() {
     }
 
     const formatSlot = (item, idx) => {
+      const inventoryFields = item?.inventoryFields || null
+      const slotIndex = idx - 1
       const candidates = [
-        { key: `text${idx}`, label: translateOrFallback('text_field', idx, `Text ${idx}`) },
-        { key: `mtext${idx}`, label: translateOrFallback('multiline_field', idx, `Long Text ${idx}`) },
-        { key: `num${idx}`, label: translateOrFallback('number_field', idx, `Number ${idx}`) },
-        { key: `bool${idx}`, label: translateOrFallback('bool_field', idx, `Boolean ${idx}`) },
-        { key: `link${idx}`, label: translateOrFallback('link_field', idx, `Link ${idx}`), isLink: true }
+        { key: `text${idx}`, fieldKey: 'text', translationKey: 'text_field', fallback: `Text ${idx}` },
+        { key: `mtext${idx}`, fieldKey: 'mtext', translationKey: 'multiline_field', fallback: `Long Text ${idx}` },
+        { key: `num${idx}`, fieldKey: 'num', translationKey: 'number_field', fallback: `Number ${idx}` },
+        { key: `bool${idx}`, fieldKey: 'bool', translationKey: 'bool_field', fallback: `Boolean ${idx}` },
+        { key: `link${idx}`, fieldKey: 'link', translationKey: 'link_field', fallback: `Link ${idx}`, isLink: true }
       ]
 
       for (const cand of candidates) {
@@ -52,7 +54,11 @@ export default function Search() {
         if (raw === null || raw === undefined) continue
         const value = normalizeValue(raw)
         if (!value) continue
-        return { value, label: cand.label, isLink: !!cand.isLink }
+        const configured = inventoryFields?.[cand.fieldKey]?.[slotIndex]?.title?.trim()
+        const label = configured && configured.length > 0
+          ? configured
+          : translateOrFallback(cand.translationKey, idx, cand.fallback)
+        return { value, label, isLink: !!cand.isLink }
       }
       return { value: '', label: '', isLink: false }
     }

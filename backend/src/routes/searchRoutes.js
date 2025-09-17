@@ -3,6 +3,18 @@ import { prisma } from '../services/prisma.js'
 
 const router = Router()
 
+const typeLabelToKey = (type) => {
+  switch (type) {
+    case 'TEXT': return 'text'
+    case 'MTEXT': return 'mtext'
+    case 'NUMBER': return 'num'
+    case 'LINK': return 'link'
+    case 'BOOL': return 'bool'
+    case 'IMAGE': return 'image'
+    default: return String(type || '').toLowerCase()
+  }
+}
+
 router.get('/', async (req, res) => {
   const q = (req.query.q || '').toString().trim()
   if (!q) return res.json({ inventories: [], items: [] })
@@ -82,7 +94,41 @@ router.get('/', async (req, res) => {
     })
   ])
 
-  res.json({ inventories, items })
+  const inventoryIds = Array.from(new Set(items.map(item => item.inventoryId))).filter(Boolean)
+  let fieldsByInventory = {}
+
+  if (inventoryIds.length > 0) {
+    const inventoryFields = await prisma.inventoryField.findMany({
+      where: { inventoryId: { in: inventoryIds } },
+      select: {
+        inventoryId: true,
+        type: true,
+        slot: true,
+        title: true,
+        showInTable: true
+      }
+    })
+
+    const baseFields = () => ({ text: [], mtext: [], num: [], link: [], bool: [], image: [] })
+
+    inventoryFields.forEach(field => {
+      const key = typeLabelToKey(field.type)
+      if (!key) return
+      if (!fieldsByInventory[field.inventoryId]) fieldsByInventory[field.inventoryId] = baseFields()
+      const slots = fieldsByInventory[field.inventoryId][key]
+      slots[field.slot - 1] = {
+        title: field.title || '',
+        showInTable: !!field.showInTable
+      }
+    })
+  }
+
+  const itemsWithFields = items.map(item => ({
+    ...item,
+    inventoryFields: fieldsByInventory[item.inventoryId] || null
+  }))
+
+  res.json({ inventories, items: itemsWithFields })
 })
 
 export default router
