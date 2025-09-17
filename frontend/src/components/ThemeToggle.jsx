@@ -19,15 +19,13 @@ export default function ThemeToggle({ className = "" }) {
     }
   }, [dark])
 
-  const baseClass = "btn-plain inline-flex items-center justify-center h-10 rounded-lg bg-zinc-200 text-zinc-900 shadow-sm transition-colors hover:bg-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 dark:bg-[#111] dark:text-amber-300 dark:hover:bg-[#1a1a1a]"
-
   return (
     <button
       type="button"
       onClick={() => setDark(v => !v)}
       aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
       title={dark ? "Light mode" : "Dark mode"}
-      className={`${baseClass} w-10 px-0 ${className}`.trim()}
+      className={`btn-plain inline-flex items-center justify-center h-10 w-10 rounded-lg bg-zinc-200 text-zinc-900 shadow-sm transition-colors hover:bg-zinc-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 dark:bg-[#111] dark:text-amber-300 dark:hover:bg-[#1a1a1a] ${className}`.trim()}
     >
       {dark ? (
         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-5 h-5"><path fill="currentColor" d="M6.76 4.84l-1.8-1.79L3.17 4.84l1.79 1.8l1.8-1.8zm10.48 0l1.8-1.79l1.79 1.79l-1.79 1.8l-1.8-1.8zM12 4V1h-0v3h0zm0 19v-3h0v3h0zM4 13H1v-2h3v2zm19 0h-3v-2h3v2zM6.76 19.16l-1.8 1.8l-1.79-1.8l1.79-1.79l1.8 1.79zm10.48 0l1.8 1.8l1.79-1.8l-1.79-1.79l-1.8 1.79zM12 18a6 6 0 1 1 0-12a6 6 0 0 1 0 12z"/></svg>

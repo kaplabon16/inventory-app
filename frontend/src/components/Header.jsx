@@ -81,8 +81,7 @@ export default function Header() {
 
   const isAdmin = !!user?.roles?.includes('ADMIN')
 
-  const headerButtonBase = "btn-plain inline-flex items-center justify-center h-10 rounded-lg shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 bg-zinc-200 text-zinc-900 hover:bg-zinc-300 dark:bg-[#111] dark:text-amber-300 dark:hover:bg-[#1a1a1a]"
-  const headerButton = `${headerButtonBase} px-4 min-w-[3rem]`.trim()
+  const headerButton = "inline-flex items-center justify-center h-10 min-w-[3rem] px-5 text-sm font-semibold rounded-full shadow-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30"
 
   const handleTermChange = (e) => setTerm(e.target.value)
   const searchLabel = t("search")
@@ -154,8 +153,8 @@ export default function Header() {
               </button>
             </>
           )}
-          <ThemeToggle className="ml-1" />
-          <LangToggle className="ml-1" baseClass={headerButtonBase} />
+          <ThemeToggle />
+          <LangToggle />
         </div>
       </div>
 
@@ -250,7 +249,7 @@ export default function Header() {
 
           <div className="flex items-center gap-3 mt-4">
             <ThemeToggle />
-            <LangToggle baseClass={headerButtonBase} />
+            <LangToggle />
           </div>
         </div>
       )}

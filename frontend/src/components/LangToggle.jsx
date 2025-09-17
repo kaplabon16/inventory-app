@@ -2,7 +2,7 @@
 import { useMemo } from "react"
 import { useTranslation } from "react-i18next"
 
-export default function LangToggle({ className = "", baseClass }) {
+export default function LangToggle({ className = "" }) {
   const { i18n } = useTranslation()
 
   const switchLanguage = () => {
@@ -12,8 +12,7 @@ export default function LangToggle({ className = "", baseClass }) {
 
   const langCode = useMemo(() => (i18n.language || "en").toUpperCase(), [i18n.language])
 
-  const defaultBase = "btn-plain inline-flex items-center justify-center h-10 rounded-lg shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-400 bg-zinc-200 text-zinc-900 hover:bg-zinc-300 dark:bg-[#111] dark:text-amber-300 dark:hover:bg-[#1a1a1a]"
-  const buttonClass = `${baseClass || defaultBase} px-4 min-w-[3rem] ${className}`.trim()
+  const buttonClass = `inline-flex items-center justify-center h-10 min-w-[3rem] px-5 text-sm font-semibold rounded-full shadow-sm bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-300 dark:bg-blue-500/20 dark:text-blue-200 dark:hover:bg-blue-500/30 ${className}`.trim()
 
   return (
     <button
