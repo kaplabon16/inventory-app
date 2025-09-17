@@ -2,9 +2,10 @@ import { Router } from 'express'
 import passport from 'passport'
 import bcrypt from 'bcrypt'
 import jwt from 'jsonwebtoken'
-import { prisma } from '../services/prisma.js'    
+import { prisma } from '../services/prisma.js'
 import { configurePassport } from '../config/passport.js'
 import { signToken } from '../middleware/auth.js'
+import { ensureAdminRole } from '../utils/adminRole.js'
 
 const router = Router()
 
@@ -140,9 +141,11 @@ router.post('/register', async (req, res) => {
     if (exists) return res.status(400).json({ error: 'ALREADY_EXISTS', message: 'Email already registered.' })
 
     const hash = await bcrypt.hash(password, 10)
-    const user = await prisma.user.create({
+    let user = await prisma.user.create({
       data: { email, name, password: hash, roles: [], blocked: false },
     })
+
+    user = await ensureAdminRole(user)
 
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
     setCookieToken(res, safe)
@@ -159,7 +162,7 @@ router.post('/login', async (req, res) => {
     email = (email || '').trim().toLowerCase()
     if (!email || !password) return res.status(400).json({ error: 'INVALID_INPUT', message: 'Email and password required.' })
 
-    const user = await prisma.user.findUnique({ where: { email } })
+    let user = await prisma.user.findUnique({ where: { email } })
     if (!user) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
     if (user.blocked) return res.status(403).json({ error: 'BLOCKED', message: 'Your account is blocked.' })
     if (!user.password) {
@@ -171,6 +174,8 @@ router.post('/login', async (req, res) => {
 
     const ok = await bcrypt.compare(password, user.password)
     if (!ok) return res.status(400).json({ error: 'INVALID_CREDENTIALS', message: 'Invalid email or password.' })
+
+    user = await ensureAdminRole(user)
 
     const safe = { id: user.id, email: user.email, name: user.name, roles: user.roles, blocked: user.blocked }
     setCookieToken(res, safe)

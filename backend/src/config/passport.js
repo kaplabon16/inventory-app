@@ -2,6 +2,7 @@ import passport from 'passport'
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20'
 import { Strategy as GitHubStrategy } from 'passport-github2'
 import { prisma } from '../services/prisma.js' 
+import { ensureAdminRole } from '../utils/adminRole.js'
 
 export function configurePassport() {
   const {
@@ -57,6 +58,8 @@ export function configurePassport() {
             }
           }
 
+          user = await ensureAdminRole(user)
+
           if (user.blocked) {
             return done(null, false, { message: 'Account is blocked' })
           }
@@ -85,7 +88,7 @@ export function configurePassport() {
         scope: ['user:email'] 
       },
       async (_at, _rt, profile, done) => {
-        try {       
+        try {
           const email = (
             profile.emails?.find(e => e.verified)?.value || 
             profile.emails?.[0]?.value ||
@@ -103,7 +106,7 @@ export function configurePassport() {
           let user = await prisma.user.findUnique({ where: { email } })
           
           if (!user) {
-              user = await prisma.user.create({
+            user = await prisma.user.create({
               data: { 
                 email, 
                 name: name || email, 
@@ -114,7 +117,7 @@ export function configurePassport() {
                 blocked: false
               }
             })
-          } else {       
+          } else {
             if (!user.provider || !user.providerId) {
               user = await prisma.user.update({
                 where: { email },
@@ -127,7 +130,9 @@ export function configurePassport() {
             }
           }
 
-             if (user.blocked) {
+          user = await ensureAdminRole(user)
+
+          if (user.blocked) {
             return done(null, false, { message: 'Account is blocked' })
           }
 
